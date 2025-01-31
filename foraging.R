@@ -5,7 +5,7 @@ library(parallel)
 library(ggplot2)
 library(gganimate)
 
-tracking <- read.csv("~/data/foraging/csv/merged.csv") %>% 
+tracking <- read.csv("~/data/foraging/csv/merged.csv") %>%
   mutate(season = tolower(season))
 cmperpixel = 0.187192
 coords <- read.csv("~/data/foraging/islands.csv") %>%
