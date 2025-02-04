@@ -15,7 +15,7 @@ coords <- read.csv("~/data/foraging/islands.csv") %>%
   separate(C, into = c("C_x", "C_y"), sep = ";", convert = TRUE) %>% 
   separate(D, into = c("D_x", "D_y"), sep = ";", convert = TRUE) %>% 
   separate(door, into = c("door_x", "door_y"), sep = ";", convert = TRUE) %>% 
-  mutate(unique_trial_ID = as.factor(paste(season, trial, ID, sep = "_")),
+  mutate(unique_trial_ID = as.factor(paste(season, ID, trial, sep = "_")),
          ID = as.factor(ID),
          season = as.factor(season),
          trial = as.factor(trial),
@@ -25,7 +25,7 @@ coords <- read.csv("~/data/foraging/islands.csv") %>%
 tracking[c('ANGLE')][sapply(tracking[c('ANGLE')], is.infinite)] <- NA #transform inf values in NA, then drop them
 tracking <- tracking %>% 
   drop_na(ANGLE) %>% 
-  mutate(unique_trial_ID = paste(season, trial, ID, sep = "_"))
+  mutate(unique_trial_ID = paste(season, ID, trial, sep = "_"))
 
 foraging_ls <- split(tracking, tracking$unique_trial_ID)
 
