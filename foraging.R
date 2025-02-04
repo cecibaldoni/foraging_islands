@@ -5,9 +5,10 @@ library(parallel)
 library(ggplot2)
 library(gganimate)
 
-# tracking <- read.csv("~/data/foraging/csv/merged.csv") %>%
+tracking <- read.csv("~/data/foraging/csv/merged.csv") %>%
   mutate(season = tolower(season))
 cmperpixel = 0.187192
+
 coords <- read.csv("~/data/foraging/islands.csv") %>%
   separate(A, into = c("A_x", "A_y"), sep = ";", convert = TRUE) %>% 
   separate(B, into = c("B_x", "B_y"), sep = ";", convert = TRUE) %>% 
@@ -28,44 +29,61 @@ tracking <- tracking %>%
 
 foraging_ls <- split(tracking, tracking$unique_trial_ID)
 
-x = foraging_ls[['spring_T1S1_20201103-5']]
-door <- coords %>%
-  filter(unique_trial_ID == unique(x$unique_trial_ID)) %>%
-  dplyr::select(c("door_x", "door_y"))
-str(door)
+#smooth and clean tracking data
+clean_trajectory <- function(data, door_x, door_y, max_jump = 20) {
+  # Step 1: Remove frames far from the door
+  data <- data %>%
+    mutate(dist_from_door = sqrt((x - door_x)^2 + (y - door_y)^2),
+           before_close = cumsum(dist_from_door <= 15) == 0) %>%
+    filter(!before_close) %>%
+    select(-dist_from_door, -before_close) %>%
+    mutate(frame = row_number())  # Re-number frames after filtering
+  
+  # Step 2: Detect and fix clusters of jumps
+  data <- data %>%
+    mutate(x_lag = lag(x, default = first(x)),
+           y_lag = lag(y, default = first(y)),
+           dist = sqrt((x - x_lag)^2 + (y - y_lag)^2),
+           is_jump = dist > max_jump) %>%
+    mutate(is_jump = replace_na(is_jump, FALSE))
+  
+  anchor_x <- data$x[1]
+  anchor_y <- data$y[1]
+  
+  for (i in seq_len(nrow(data))) {
+    if (data$is_jump[i]) {
+      for (j in i:nrow(data)) {
+        dist_to_anchor <- sqrt((data$x[j] - anchor_x)^2 + (data$y[j] - anchor_y)^2)
+        if (dist_to_anchor <= max_jump) {
+          break
+        } else {
+          data$x[j] <- anchor_x
+          data$y[j] <- anchor_y
+        }
+      }
+    } else {
+      anchor_x <- data$x[i]
+      anchor_y <- data$y[i]
+    }
+  }
+  data <- data %>% select(-x_lag, -y_lag, -dist, -is_jump)
+  return(data)
+}
 
-x1 <- x %>%
-  # Step 1: Remove frames at the beginnin, far from the door
-  mutate(dist_from_door = sqrt((x - door$door_x[[1]])^2 + (y - door$door_y[[1]])^2),
-         before_close = cumsum(dist_from_door <= 15) == 0) %>%
-  filter(!before_close) %>%
-  select(-dist_from_door, -before_close) %>% 
-  mutate(frame = row_number())
-
-ggplot(data = x1[100:300,], aes(x, y, colour = frame)) +
-  geom_path()
-
-
-
-ggplot(data = try, aes(x, y, colour = frame)) +
-  geom_path()
-
-x %>% 
-  ggplot(aes(x, y, colour = frame)) +
-  ggtitle(x$unique_trial_ID) +
-  geom_point(data = coords %>% filter(unique_trial_ID == unique(x$unique_trial_ID)), aes(x = A_x, y = A_y), size = 10, colour = "red") +
-  geom_point(data = coords %>% filter(unique_trial_ID == unique(x$unique_trial_ID)), aes(x = B_x, y = B_y), size = 10, colour = "blue") +
-  geom_point(data = coords %>% filter(unique_trial_ID == unique(x$unique_trial_ID)), aes(x = C_x, y = C_y), size = 10, colour = "green") +
-  geom_point(data = coords %>% filter(unique_trial_ID == unique(x$unique_trial_ID)), aes(x = D_x, y = D_y), size = 10, colour = "gold") +
-  geom_path()
-#Need to smooth movement
 
 all_ls <- lapply(foraging_ls, function(x){
-  x = foraging_ls[['spring_T1S1_20201103-5']]
+  #x = foraging_ls[['spring_T1S1_20201103-5']]
+  
   door <- coords %>%
     filter(unique_trial_ID == unique(x$unique_trial_ID)) %>%
-    dplyr::select(c("door_x", "door_y")) %>%
+    dplyr::select(c("door_x", "door_y")) #%>%
+    #st_as_sf(coords = c("door_x", "door_y"))
+  
+  x <- clean_trajectory(x, door$door_x[[1]], door$door_y[[1]], max_jump = 20)
+  
+  door <- door %>% 
     st_as_sf(coords = c("door_x", "door_y"))
+  
   door_buffer <- door %>%
     st_buffer(dist = 4)
   
