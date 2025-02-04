@@ -79,7 +79,7 @@ all_ls <- lapply(foraging_ls, function(x){
     dplyr::select(c("door_x", "door_y")) #%>%
     #st_as_sf(coords = c("door_x", "door_y"))
   
-  x <- clean_trajectory(x, door$door_x[[1]], door$door_y[[1]], max_jump = 20)
+  x <- clean_trajectory(x, door$door_x[[1]], door$door_y[[1]])
   
   door <- door %>% 
     st_as_sf(coords = c("door_x", "door_y"))
@@ -168,9 +168,9 @@ lapply(head(result_ls), function(i) {
     ggplot(aes(x, y, colour = frame)) +
     ggtitle(i$unique_trial_ID) +
     geom_point(data = islands, aes(x = A_x, y = A_y), size = 10, colour = "red") +
-    geom_point(data = islands, aes(x = B_x, y = B_y), size = 3, colour = "blue") +
-    geom_point(data = islands, aes(x = C_x, y = C_y), size = 3, colour = "green") +
-    geom_point(data = islands, aes(x = D_x, y = D_y), size = 3, colour = "gold") +
+    geom_point(data = islands, aes(x = B_x, y = B_y), size = 10, colour = "blue") +
+    geom_point(data = islands, aes(x = C_x, y = C_y), size = 10, colour = "green") +
+    geom_point(data = islands, aes(x = D_x, y = D_y), size = 10, colour = "gold") +
     geom_path() +
     theme(axis.title.x = element_blank(),
           axis.text.x = element_blank(),
