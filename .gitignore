@@ -2,3 +2,12 @@
 .Rhistory
 .RData
 .Ruserdata
+
+*.csv
+*.ods
+
+csv/
+pv/
+npz/
+results/
+
