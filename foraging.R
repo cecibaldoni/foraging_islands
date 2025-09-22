@@ -160,6 +160,16 @@ all_ls <- lapply(foraging_ls, function(x){
 result <- read.csv("~/data/foraging/results/all_trials.csv")
 result_ls <- split(result, result$unique_trial_ID)
 
+## Left join island-slot information ----
+# TODO @Francesco - try this code with a 'clean' subset of the island_visit df and see if there's errors
+
+island_visits <- read.csv("island_visits.csv")
+
+result_ls <- map(result_ls, function(df) {
+  df %>%
+    left_join(island_visits, by = c("unique_trial_ID", "frame"))
+})
+
 # Plots (example code) ----
 
 lapply(head(result_ls), function(i) { 
