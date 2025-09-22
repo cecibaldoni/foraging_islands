@@ -1,3 +1,5 @@
+# Load libraries ----
+
 library(tidyverse)
 library(sf)
 library(mapview)
@@ -5,6 +7,9 @@ library(parallel)
 library(ggplot2)
 library(gganimate)
 
+## TODO renv snapshot ----
+
+# Load and tidy data ----
 tracking <- read.csv("~/data/foraging/csv/merged.csv") %>%
   mutate(season = tolower(season))
 cmperpixel = 0.187192
@@ -29,9 +34,8 @@ tracking <- tracking %>%
 
 foraging_ls <- split(tracking, tracking$unique_trial_ID)
 
-#smooth and clean tracking data
+# Smooth and clean tracking data
 clean_trajectory <- function(data, door_x, door_y, max_jump = 20) {
-  # Step 1: Remove frames far from the door
   data <- data %>%
     mutate(dist_from_door = sqrt((x - door_x)^2 + (y - door_y)^2),
            before_close = cumsum(dist_from_door <= 15) == 0) %>%
@@ -73,7 +77,6 @@ clean_trajectory <- function(data, door_x, door_y, max_jump = 20) {
 
 all_ls <- lapply(foraging_ls, function(x){
   #x = foraging_ls[['spring_T1S1_20201103-5']]
-  
   door <- coords %>%
     filter(unique_trial_ID == unique(x$unique_trial_ID)) %>%
     dplyr::select(c("door_x", "door_y")) #%>%
@@ -149,7 +152,7 @@ all_ls <- lapply(foraging_ls, function(x){
   
   #write.csv(track_save, file = paste0("~/data/foraging/results/", unique(x$unique_trial_ID),".csv"))
   write.table(track_save, file = "~/data/foraging/results/all_trials.csv", 
-              append = TRUE, sep = ",", col.names = !file.exists("~/data/foraging/results/all_trials.csv"),  # Write headers only once
+              append = TRUE, sep = ",", col.names = !file.exists("~/data/foraging/results/all_trials.csv"),
               row.names = FALSE)
   
 })
@@ -157,7 +160,7 @@ all_ls <- lapply(foraging_ls, function(x){
 result <- read.csv("~/data/foraging/results/all_trials.csv")
 result_ls <- split(result, result$unique_trial_ID)
 
-#Plots
+# Plots (example code) ----
 
 lapply(head(result_ls), function(i) { 
   islands <- coords %>%
@@ -181,5 +184,3 @@ lapply(head(result_ls), function(i) {
   
   print(plot)
 })
-
-#just an add to check if everything is working correctly
