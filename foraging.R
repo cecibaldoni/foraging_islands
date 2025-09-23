@@ -77,8 +77,6 @@ clean_trajectory <- function(data, door_x, door_y, max_jump = 20) {
 
 
 all_ls <- lapply(foraging_ls, function(x){
-  # x = foraging_ls[['spring_20201103-5_T1S1']]
-  # x = foraging_ls[[18]]
   door <- coords %>%
     filter(unique_trial_ID == unique(x$unique_trial_ID)) %>%
     dplyr::select(c("door_x", "door_y")) #%>%
@@ -163,28 +161,22 @@ all_ls <- lapply(foraging_ls, function(x){
 result <- read.csv(here("csv/foraging_results.csv"))
 result_ls <- split(result, result$unique_trial_ID)
 
-## Left join island-slot information ----
-# TODO @Francesco - try this code with a 'clean' subset of the island_visit df and see if there's errors
+## Left join information from the visits of the island to the tracking results
 
 island_visit <- read.csv(here("csv/island_visit_trial.csv"))
 
-# Check if the types are the same
-# Had to change a typo
-# # Replace IDs in ALL character columns
+## Check if the types are the same and in case we have to edit IDs in all character columns
 # island_visit <- island_visit %>%
 #   mutate(across(where(is.character), ~ sub("_(\\d)_", "-\\1_", .)))
+
 # # Write back to CSV (overwrite original)
 # write_csv(island_visit, here("csv/island_visit_trial.csv"))
 
-
-result_ls <- map(result_ls, function(df) {
+result_final <- map(result_ls, function(df) {
   df %>%
     mutate(frame = as.integer(frame)) %>%
-    left_join(island_visit %>% mutate(frame = as.integer(frame)), 
-              by = c("unique_trial_ID", "frame"))
+    left_join(island_visit, by = c("unique_trial_ID", "frame"))
 })
-
-hello <- result_ls[["spring_20200804-3_T1S2"]]
 
 # Plots (example code) ----
 
