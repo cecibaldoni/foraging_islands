@@ -8,8 +8,6 @@ library(ggplot2)
 library(gganimate)
 library(here)
 
-## TODO renv snapshot ----
-
 # Load and tidy data ----
 tracking <- read.csv(here("csv/merged.csv")) %>%
   mutate(season = tolower(season))
@@ -163,20 +161,23 @@ result_ls <- split(result, result$unique_trial_ID)
 
 ## Left join information from the visits of the island to the tracking results
 
-island_visit <- read.csv(here("csv/island_visit_trial.csv"))
+island_visit <- read.csv(here("csv/island_visit_FR.csv"))
 
 ## Check if the types are the same and in case we have to edit IDs in all character columns
-# island_visit <- island_visit %>%
-#   mutate(across(where(is.character), ~ sub("_(\\d)_", "-\\1_", .)))
+island_visit <- island_visit %>%
+   mutate(across(where(is.character), ~ sub("_(\\d)_", "-\\1_", .)))
 
-# # Write back to CSV (overwrite original)
-# write_csv(island_visit, here("csv/island_visit_trial.csv"))
+## Write back to CSV (overwrite original)
+write_csv(island_visit, here("csv/island_visit_FR.csv"))
 
 result_final <- map(result_ls, function(df) {
   df %>%
     mutate(frame = as.integer(frame)) %>%
     left_join(island_visit, by = c("unique_trial_ID", "frame"))
 })
+
+##check if the csv is merged with the tracking
+#check <- view(result_final[["any unique trial ID"]])
 
 # Plots (example code) ----
 
