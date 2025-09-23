@@ -6,15 +6,16 @@ library(mapview)
 library(parallel)
 library(ggplot2)
 library(gganimate)
+library(here)
 
 ## TODO renv snapshot ----
 
 # Load and tidy data ----
-tracking <- read.csv("~/data/foraging/csv/merged.csv") %>%
+tracking <- read.csv(here("csv/merged.csv")) %>%
   mutate(season = tolower(season))
 cmperpixel = 0.187192
 
-coords <- read.csv("~/data/foraging/islands.csv") %>%
+coords <- read.csv(here("csv/islands.csv")) %>%
   separate(A, into = c("A_x", "A_y"), sep = ";", convert = TRUE) %>% 
   separate(B, into = c("B_x", "B_y"), sep = ";", convert = TRUE) %>% 
   separate(C, into = c("C_x", "C_y"), sep = ";", convert = TRUE) %>% 
@@ -76,7 +77,8 @@ clean_trajectory <- function(data, door_x, door_y, max_jump = 20) {
 
 
 all_ls <- lapply(foraging_ls, function(x){
-  #x = foraging_ls[['spring_T1S1_20201103-5']]
+  # x = foraging_ls[['spring_20201103-5_T1S1']]
+  # x = foraging_ls[[18]]
   door <- coords %>%
     filter(unique_trial_ID == unique(x$unique_trial_ID)) %>%
     dplyr::select(c("door_x", "door_y")) #%>%
@@ -147,28 +149,42 @@ all_ls <- lapply(foraging_ls, function(x){
   track_save <- track_sf_2 %>% 
     extract(geometry, c('x', 'y'), '\\((.*), (.*)\\)', convert = TRUE) %>% 
     relocate(x, .after = frame) %>% 
-    relocate(y, .after = x) %>% 
+    relocate(y, .after = unique_trial_ID) %>% 
     relocate(unique_trial_ID, .before = ID)
   
+  file_path <- here("csv", "foraging_results.csv")
   #write.csv(track_save, file = paste0("~/data/foraging/results/", unique(x$unique_trial_ID),".csv"))
-  write.table(track_save, file = "~/data/foraging/results/all_trials.csv", 
-              append = TRUE, sep = ",", col.names = !file.exists("~/data/foraging/results/all_trials.csv"),
+  write.table(track_save, file = file_path, 
+              append = TRUE, sep = ",", col.names = !file.exists("file_path"),
               row.names = FALSE)
   
 })
 
-result <- read.csv("~/data/foraging/results/all_trials.csv")
+result <- read.csv(here("csv/foraging_results.csv"))
 result_ls <- split(result, result$unique_trial_ID)
 
 ## Left join island-slot information ----
 # TODO @Francesco - try this code with a 'clean' subset of the island_visit df and see if there's errors
 
-island_visits <- read.csv("island_visits.csv")
+island_visit <- read.csv(here("csv/island_visit_trial.csv"))
+
+# Check if the types are the same
+# Had to change a typo
+# # Replace IDs in ALL character columns
+# island_visit <- island_visit %>%
+#   mutate(across(where(is.character), ~ sub("_(\\d)_", "-\\1_", .)))
+# # Write back to CSV (overwrite original)
+# write_csv(island_visit, here("csv/island_visit_trial.csv"))
+
 
 result_ls <- map(result_ls, function(df) {
   df %>%
-    left_join(island_visits, by = c("unique_trial_ID", "frame"))
+    mutate(frame = as.integer(frame)) %>%
+    left_join(island_visit %>% mutate(frame = as.integer(frame)), 
+              by = c("unique_trial_ID", "frame"))
 })
+
+hello <- result_ls[["spring_20200804-3_T1S2"]]
 
 # Plots (example code) ----
 
