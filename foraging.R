@@ -181,10 +181,14 @@ result_final <- map(result_ls, function(df) {
 
 # Plots (example code) ----
 
-lapply(head(result_ls), function(i) { 
+lapply(head(result_final), function(i) { 
   islands <- coords %>%
     filter(unique_trial_ID == unique(i$unique_trial_ID)) %>%
-    select(4:11, 14)
+    select(4:11, 14) %>% mutate(across(everything(), ~ as.numeric(as.character(.))))
+  
+  i <- i %>%
+    mutate(across(c(x, y), ~ as.numeric(as.character(.)))) +
+  (food_color = ifelse(food == 1, "green", "red"))
   
   plot <- i %>% 
     ggplot(aes(x, y, colour = frame)) +
@@ -194,6 +198,11 @@ lapply(head(result_ls), function(i) {
     geom_point(data = islands, aes(x = C_x, y = C_y), size = 10, colour = "green") +
     geom_point(data = islands, aes(x = D_x, y = D_y), size = 10, colour = "gold") +
     geom_path() +
+    
+    geom_point(aes(x = x, y = y, colour = food_color), shape = 4, size = 4) +
+    scale_colour_identity() +
+    scale_y_reverse() +
+    
     theme(axis.title.x = element_blank(),
           axis.text.x = element_blank(),
           axis.ticks.x = element_blank(),
