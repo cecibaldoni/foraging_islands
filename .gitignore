@@ -4,12 +4,10 @@
 .Ruserdata
 .RDataTmp
 .RDataTmp1
-
 *.csv
 *.ods
-
 csv/
 pv/
 npz/
 results/
-
+Rplot.pdf
