@@ -176,6 +176,35 @@ result_final <- map(result_ls, function(df) {
     left_join(island_visit, by = c("unique_trial_ID", "frame"))
 })
 
+library(stringr)
+
+mismatches <- lapply(result_final, function(df) {
+  
+  # Split travelling vs non-travelling
+  travelling_rows <- df[df$journey == "travelling", ]
+  at_rows <- df[df$journey != "travelling", ]
+  
+  # Count letters under travelling
+  travelling_counts <- table(travelling_rows$island_debug)
+  
+  # Extract the letter from journey: "at_A_1" → "A"
+  letters_in_journey <- str_extract(at_rows$journey, "[A-Z]")
+  
+  # Count rows where island_debug matches journey letter
+  matches <- sum(tolower(letters_in_journey) == tolower(at_rows$island_debug))
+  
+  list(
+    travelling_counts = travelling_counts,
+    matches = matches
+  )
+})
+library(stringr)
+
+#check for the mismatches among my observations and the pvs
+mismatch_rows <- lapply(result_final, function(df) {
+  df[df$journey == "travelling" & !is.na(df$island_debug) & df$island_debug != "", ]
+})
+
 ##check if the csv is merged with the tracking
 #check <- view(result_final[["any unique trial ID"]])
 
