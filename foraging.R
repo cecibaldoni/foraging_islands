@@ -229,3 +229,34 @@ lapply(head(result_final), function(i) {
   print(plot)
 })
 
+library(gganimate)
+
+lapply(
+  result_final[sapply(result_final, function(df) df$unique_trial_ID[1] == "summer_20210803-3_T2S1")],
+  function(i) {
+    
+    islands <- coords %>%
+      filter(unique_trial_ID == i$unique_trial_ID[1]) %>%
+      select(4:11, 14) %>%
+      mutate(across(everything(), ~ as.numeric(as.character(.))))
+    
+    i <- i %>% 
+      mutate(across(c(x, y), ~ as.numeric(as.character(.))))
+    
+    plot <- ggplot(i, aes(x, y, colour = frame)) +
+      ggtitle(i$unique_trial_ID[1]) +
+      geom_point(data = islands, aes(x = A_x, y = A_y), size = 10, colour = "red") +
+      geom_point(data = islands, aes(x = B_x, y = B_y), size = 10, colour = "blue") +
+      geom_point(data = islands, aes(x = C_x, y = C_y), size = 10, colour = "green") +
+      geom_point(data = islands, aes(x = D_x, y = D_y), size = 10, colour = "gold") +
+      geom_path() +
+      geom_point(aes(x = x, y = y), shape = 4, size = 4,
+      color = ifelse(i$food == 1, "green", "red")) +
+      scale_y_reverse() +
+      transition_time(frame)+
+      theme_void()
+    
+    print(plot)
+  }
+)
+
