@@ -231,32 +231,36 @@ lapply(head(result_final), function(i) {
 
 library(gganimate)
 
-lapply(
-  result_final[sapply(result_final, function(df) df$unique_trial_ID[1] == "summer_20210803-3_T2S1")],
-  function(i) {
-    
-    islands <- coords %>%
-      filter(unique_trial_ID == i$unique_trial_ID[1]) %>%
-      select(4:11, 14) %>%
-      mutate(across(everything(), ~ as.numeric(as.character(.))))
-    
-    i <- i %>% 
-      mutate(across(c(x, y), ~ as.numeric(as.character(.))))
-    
-    plot <- ggplot(i, aes(x, y, colour = frame)) +
-      ggtitle(i$unique_trial_ID[1]) +
-      geom_point(data = islands, aes(x = A_x, y = A_y), size = 10, colour = "red") +
-      geom_point(data = islands, aes(x = B_x, y = B_y), size = 10, colour = "blue") +
-      geom_point(data = islands, aes(x = C_x, y = C_y), size = 10, colour = "green") +
-      geom_point(data = islands, aes(x = D_x, y = D_y), size = 10, colour = "gold") +
-      geom_path() +
-      geom_point(aes(x = x, y = y), shape = 4, size = 4,
-      color = ifelse(i$food == 1, "green", "red")) +
-      scale_y_reverse() +
-      transition_time(frame)+
-      theme_void()
-    
-    print(plot)
-  }
-)
+df <- result_final[[which(sapply(result_final, function(df) df$unique_trial_ID[1] == "summer_20210803-3_T2S1"))]]
 
+islands <- coords %>%
+  filter(unique_trial_ID == df$unique_trial_ID[1]) %>%
+  select(A_x, A_y, B_x, B_y, C_x, C_y, D_x, D_y) %>%
+  mutate(across(everything(), as.numeric))
+
+df_food <- df %>% filter(!is.na(food) & food %in% c(0, 1))
+
+plot <- ggplot() +
+  geom_point(aes(x = islands$A_x, y = islands$A_y), color = "red", size = 10) +
+  geom_point(aes(x = islands$B_x, y = islands$B_y), color = "blue", size = 10) +
+  geom_point(aes(x = islands$C_x, y = islands$C_y), color = "green", size = 10) +
+  geom_point(aes(x = islands$D_x, y = islands$D_y), color = "gold", size = 10) +
+  geom_point(data = df, aes(x = x, y = y, group = 1)) +
+  # geom_point(data = df_food, aes(x = x, y = y, color = factor(food)), 
+  #            shape = 4, size = 4) +
+  # scale_color_manual(values = c("red", "green")) +
+  # scale_y_reverse() +
+  # labs(title = 'Frame: {frame}') +
+  theme_void() +
+  transition_time(frame) +
+  ease_aes('linear')
+
+plot
+
+str(island_visit)
+island_visit_ls <- split(island_visit, island_visit$unique_trial_ID)
+
+
+df_island <- island_visit_ls$`summer_20210803-3_T2S1`
+str(df_island)
+str(df)
