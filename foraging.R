@@ -11,7 +11,9 @@ library(dplyr)
 
 # Load and tidy data ----
 tracking <- read.csv(here("csv/merged.csv")) %>%
-  mutate(season = tolower(season))
+  rename(season = ID, ID = trial, trial = season) %>%
+  mutate(season = tolower(season))  
+  
 cmperpixel = 0.187192
 
 coords <- read.csv(here("csv/islands.csv")) %>%
@@ -184,6 +186,9 @@ result_final <- map(result_ls, function(df) {
 mismatch_rows <- lapply(result_final, function(df) {
   df[df$journey == "travelling" & !is.na(df$island_debug) & df$island_debug != "", ]
 })
+
+#List of df with more than 10 mismatch
+mismatch_rows_filtered <- mismatch_rows[sapply(mismatch_rows, nrow) > 10]
 
 #check if the observations from the pv have been all manually analysed
 result %>% summarise(unique_trial_ID = n_distinct(unique_trial_ID))
