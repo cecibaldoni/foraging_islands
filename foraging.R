@@ -2,7 +2,7 @@
 
 library(tidyverse)
 library(sf)
-library(mapview)
+# library(mapview)
 library(parallel)
 library(ggplot2)
 library(gganimate)
@@ -10,8 +10,8 @@ library(here)
 library(dplyr)
 
 # Load and tidy data ----
-tracking <- read.csv(here("csv/merged.csv")) %>%
-  rename(season = ID, ID = trial, trial = season) %>%
+tracking_2 <- read.csv(here("csv/merged.csv")) %>%
+  #rename(season = ID, ID = trial, trial = season) %>%
   mutate(season = tolower(season))  
   
 cmperpixel = 0.187192
@@ -45,7 +45,7 @@ clean_trajectory <- function(data, door_x, door_y, max_jump = 20) {
     select(-dist_from_door, -before_close) %>%
     mutate(frame = row_number())  # Re-number frames after filtering
   
-  # Step 2: Detect and fix clusters of jumps
+  # detect and fix clusters of jumps
   data <- data %>%
     mutate(x_lag = lag(x, default = first(x)),
            y_lag = lag(y, default = first(y)),

@@ -13,7 +13,7 @@ library(dplyr)
 
  ##tracking
 tracking <- read.csv(here("csv/merged.csv")) %>%
-  rename(season = ID, ID = trial, trial = season) %>%
+  #rename(season = ID, ID = trial, trial = season) %>%
   mutate(season = tolower(season)) %>% 
   unite("unique_trial_ID", season, ID, trial, sep = "_")
 
@@ -86,5 +86,37 @@ ggplot() +
 
 
 
+door <- coords %>%
+  filter(unique_trial_ID == "summer_20210803-3_T2S1") %>%
+  dplyr::select(c("door_x", "door_y")) #%>%
 
+x <- clean_trajectory(merged, door$door_x[[1]], door$door_y[[1]])
+str(x)
+str(merged)
 
+ggplot() +
+  geom_path(data = merged, aes(x=x, y=y, colour= frame)) +
+  geom_point(aes(x = islands$A_x, y = islands$A_y), color = "red", size = 10) +
+  geom_point(aes(x = islands$B_x, y = islands$B_y), color = "blue", size = 10) +
+  geom_point(aes(x = islands$C_x, y = islands$C_y), color = "green", size = 10) +
+  geom_point(aes(x = islands$D_x, y = islands$D_y), color = "gold", size = 10)
+
+ggplot() +
+  geom_path(data = x, aes(x=x, y=y, colour= frame)) +
+  geom_point(aes(x = islands$A_x, y = islands$A_y), color = "red", size = 10) +
+  geom_point(aes(x = islands$B_x, y = islands$B_y), color = "blue", size = 10) +
+  geom_point(aes(x = islands$C_x, y = islands$C_y), color = "green", size = 10) +
+  geom_point(aes(x = islands$D_x, y = islands$D_y), color = "gold", size = 10)
+
+ggplot() +
+  ## plot hexagonal buffers
+  geom_sf(data = hex_buffers, fill = "lightblue", color = "blue", alpha = 0.4) +
+  ## plot island points
+  geom_sf(data = hex_sf, color = "darkblue", size = 3) +
+  ## plot animal positioning
+  geom_point(data = x %>% 
+               filter (!is.na(food)),
+             aes(x = x, y = y, color = factor(food)), size = 1, shape = 4) +
+  scale_color_manual(values = c("0" = "red", "1" = "green")) +
+  labs(title = "Animal visits and Island Hex Buffers",
+       x = "X", y = "Y")
