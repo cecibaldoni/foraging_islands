@@ -10,7 +10,7 @@ library(here)
 library(dplyr)
 
 # Load and tidy data ----
-tracking_2 <- read.csv(here("csv/merged.csv")) %>%
+tracking <- read.csv(here("csv/merged.csv")) %>%
   #rename(season = ID, ID = trial, trial = season) %>%
   mutate(season = tolower(season))  
   
@@ -36,7 +36,13 @@ tracking <- tracking %>%
 
 foraging_ls <- split(tracking, tracking$unique_trial_ID)
 
-# Smooth and clean tracking data
+# TO DO ----
+
+#Add merging logic here, once the island_visit.csv is ready
+#Once the merging is done, then the smoothing and cleaning of the dataset can work out
+
+
+# Smooth and clean tracking data ----
 clean_trajectory <- function(data, door_x, door_y, max_jump = 20) {
   data <- data %>%
     mutate(dist_from_door = sqrt((x - door_x)^2 + (y - door_y)^2),
@@ -76,6 +82,7 @@ clean_trajectory <- function(data, door_x, door_y, max_jump = 20) {
   return(data)
 }
 
+# Main Function ----
 
 all_ls <- lapply(foraging_ls, function(x){
   door <- coords %>%
@@ -159,8 +166,12 @@ all_ls <- lapply(foraging_ls, function(x){
   
 })
 
+#Write result csv
 result <- read.csv(here("csv/foraging_results.csv"))
 result_ls <- split(result, result$unique_trial_ID)
+
+# TO DO ---- 
+#move all the code down here to before the cleaning. The logic should still work, but keep an eyeif everything is merged correctly
 
 ## Left join information from the visits of the island to the tracking results
 
