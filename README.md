@@ -2,7 +2,7 @@
 ## Methods
 
 Shrews for the behavioural experiments were captured in Möggingen, Germany (47°46'04.70"N, 8°59'47.11"E).
-The individuals were sampled in three different seasons among two years: 26 individuals in spring 2020, 35 in summer 2021 and 44 in winter 2020 for a total of 105 individuals.
+The individuals were sampled in three different seasons among two years: 7 individuals in spring 2020, 12 in summer 2021 and 11 in winter 2020 for a total of 30 individuals.
 
 Trapping was carried out with wooden live-traps baited with mealworms (*Tenebrio molitor*) and checked at <2 h intervals. 
 Each individual will be housed in two connected cages (measures). The front cage is arranged with a running wheel, a pot and dishes with food and water. The back cage is composed of several layers of hay and soil to imitate their natural environment. 
@@ -27,4 +27,4 @@ Every visit was manually registered with the letter of the island visited, the n
 
 1. foraging.R enable to merge the tracking data from Trex and the island visit data manually recorded.
 2. trajectory_debug.R solve some problem on the trajectory of the shrew movement.
-3. Mismatch solving.R solve the mismatches between the tracking observation from Trex and the island visits manually registered.
+3. mismatch_solving.R solve the mismatches between the tracking observation from Trex and the island visits manually registered.
