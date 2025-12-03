@@ -286,3 +286,17 @@ df_island <- island_visit_ls$`summer_20210803-3_T2S1`
 df_2 <- island_visit_ls[[12]]
 str(df_island)
 str(df)
+
+island_visit <- read.csv(here("csv/island_visit_FR.csv"))
+island_separate <- island_visit %>%
+  separate(unique_trial_ID, into = c("season", "ID", "session"), sep = "_")
+#check for the observation per session in each season
+obs_count <- island_visit %>% 
+  separate(unique_trial_ID, into = c("season", "ID", "session"), sep = "_") %>%
+  count(season, session, name = "n_observations")
+#check if I analized 4 session for each individual
+sessions_count <- island_visit %>%
+  separate(unique_trial_ID, into = c("season", "id", "session"), sep = "_") %>%
+  distinct(season, id, session) %>%        
+  count(season, id, name = "n_sessions")   
+
