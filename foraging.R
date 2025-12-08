@@ -11,7 +11,7 @@ library(dplyr)
 
 # Load and tidy data ----
 tracking <- read.csv(here("csv/merged.csv")) %>%
-  #rename(season = ID, ID = trial, trial = season) %>%
+  rename(season = ID, ID = trial, trial = season) %>%
   mutate(season = tolower(season))  
   
 cmperpixel = 0.187192
@@ -36,61 +36,25 @@ tracking <- tracking %>%
 
 foraging_ls <- split(tracking, tracking$unique_trial_ID)
 
-# TO DO ----
 
-#Add merging logic here, once the island_visit.csv is ready
-#Once the merging is done, then the smoothing and cleaning of the dataset can work out
+## Left join information from the visits of the island to the tracking results
+island_visit <- read.csv(here("csv/island_visit_FR.csv"))
 
+result_obs <- map(foraging_ls, function(df) {
+  df %>%
+    mutate(frame = as.integer(frame)) %>%
+    left_join(island_visit, by = c("unique_trial_ID", "frame"))
+})
 
-# Smooth and clean tracking data ----
-clean_trajectory <- function(data, door_x, door_y, max_jump = 20) {
-  data <- data %>%
-    mutate(dist_from_door = sqrt((x - door_x)^2 + (y - door_y)^2),
-           before_close = cumsum(dist_from_door <= 15) == 0) %>%
-    filter(!before_close) %>%
-    select(-dist_from_door, -before_close) %>%
-    mutate(frame = row_number())  # Re-number frames after filtering
-  
-  # detect and fix clusters of jumps
-  data <- data %>%
-    mutate(x_lag = lag(x, default = first(x)),
-           y_lag = lag(y, default = first(y)),
-           dist = sqrt((x - x_lag)^2 + (y - y_lag)^2),
-           is_jump = dist > max_jump) %>%
-    mutate(is_jump = replace_na(is_jump, FALSE))
-  
-  anchor_x <- data$x[1]
-  anchor_y <- data$y[1]
-  
-  for (i in seq_len(nrow(data))) {
-    if (data$is_jump[i]) {
-      for (j in i:nrow(data)) {
-        dist_to_anchor <- sqrt((data$x[j] - anchor_x)^2 + (data$y[j] - anchor_y)^2)
-        if (dist_to_anchor <= max_jump) {
-          break
-        } else {
-          data$x[j] <- anchor_x
-          data$y[j] <- anchor_y
-        }
-      }
-    } else {
-      anchor_x <- data$x[i]
-      anchor_y <- data$y[i]
-    }
-  }
-  data <- data %>% select(-x_lag, -y_lag, -dist, -is_jump)
-  return(data)
-}
 
 # Main Function ----
-
-all_ls <- lapply(foraging_ls, function(x){
+all_ls <- lapply(result_obs, function(x){
   door <- coords %>%
     filter(unique_trial_ID == unique(x$unique_trial_ID)) %>%
     dplyr::select(c("door_x", "door_y")) #%>%
     #st_as_sf(coords = c("door_x", "door_y"))
   
-  x <- clean_trajectory(x, door$door_x[[1]], door$door_y[[1]])
+  #x <- clean_trajectory(x, door$door_x[[1]], door$door_y[[1]])
   
   door <- door %>% 
     st_as_sf(coords = c("door_x", "door_y"))
@@ -170,44 +134,46 @@ all_ls <- lapply(foraging_ls, function(x){
 result <- read.csv(here("csv/foraging_results.csv"))
 result_ls <- split(result, result$unique_trial_ID)
 
-# TO DO ---- 
-#move all the code down here to before the cleaning. The logic should still work, but keep an eyeif everything is merged correctly
 
-## Left join information from the visits of the island to the tracking results
-
-island_visit <- read.csv(here("csv/island_visit_FR.csv"))
-
-## Check if the types are the same and in case we have to edit IDs in all character columns
-island_visit <- island_visit %>%
-   mutate(across(where(is.character), ~ sub("_(\\d)_", "-\\1_", .)))
-
-## Write back to CSV (overwrite original)
-write_csv(island_visit, here("csv/island_visit_FR.csv"))
-
-result_final <- map(result_ls, function(df) {
-  df %>%
-    mutate(frame = as.integer(frame)) %>%
-    left_join(island_visit, by = c("unique_trial_ID", "frame"))
-})
-
-##check if the csv is merged with the tracking
-#check <- view(result_final[["any unique trial ID"]])
-
-#check for the mismatches among my observations and the pvs
-mismatch_rows <- lapply(result_final, function(df) {
-  df[df$journey == "travelling" & !is.na(df$island_debug) & df$island_debug != "", ]
-})
-
-#List of df with more than 10 mismatch
-mismatch_rows_filtered <- mismatch_rows[sapply(mismatch_rows, nrow) > 10]
-
-#check if the observations from the pv have been all manually analysed
-result %>% summarise(unique_trial_ID = n_distinct(unique_trial_ID))
-island_visit %>% summarise(unique_trial_ID = n_distinct(unique_trial_ID))
-missing_ids <- setdiff(result$unique_trial_ID, island_visit$unique_trial_ID)
-missing_table <- data.frame(unique_trial_ID = missing_ids)
-
-write.csv(missing_table, "missing_ids.csv", row.names = FALSE)
+# Smooth and clean tracking data ----
+clean_trajectory <- function(data, door_x, door_y, max_jump = 20) {
+  data <- data %>%
+    mutate(dist_from_door = sqrt((x - door_x)^2 + (y - door_y)^2),
+           before_close = cumsum(dist_from_door <= 15) == 0) %>%
+    filter(!before_close) %>%
+    select(-dist_from_door, -before_close) %>%
+    mutate(frame = row_number())  # Re-number frames after filtering
+  
+  # detect and fix clusters of jumps
+  data <- data %>%
+    mutate(x_lag = lag(x, default = first(x)),
+           y_lag = lag(y, default = first(y)),
+           dist = sqrt((x - x_lag)^2 + (y - y_lag)^2),
+           is_jump = dist > max_jump) %>%
+    mutate(is_jump = replace_na(is_jump, FALSE))
+  
+  anchor_x <- data$x[1]
+  anchor_y <- data$y[1]
+  
+  for (i in seq_len(nrow(data))) {
+    if (data$is_jump[i]) {
+      for (j in i:nrow(data)) {
+        dist_to_anchor <- sqrt((data$x[j] - anchor_x)^2 + (data$y[j] - anchor_y)^2)
+        if (dist_to_anchor <= max_jump) {
+          break
+        } else {
+          data$x[j] <- anchor_x
+          data$y[j] <- anchor_y
+        }
+      }
+    } else {
+      anchor_x <- data$x[i]
+      anchor_y <- data$y[i]
+    }
+  }
+  data <- data %>% select(-x_lag, -y_lag, -dist, -is_jump)
+  return(data)
+}
 
 
 # Plots (example code) ----
@@ -249,8 +215,6 @@ library(gganimate)
 
 df <- result_final[[which(sapply(result_final, function(df) df$unique_trial_ID[1] == "summer_20210803-3_T2S1"))]]
 
-#df <- result_final[[which(sapply(result_final, function(df) df$unique_trial_ID[1] == "spring_20201103-5_T2S1"))]]
-
 islands <- coords %>%
   filter(unique_trial_ID == df$unique_trial_ID[1]) %>%
   select(A_x, A_y, B_x, B_y, C_x, C_y, D_x, D_y) %>%
@@ -278,9 +242,11 @@ plot <- ggplot() +
 
 animate(plot, fps = 1)
 
+
+#Extra checks
+
 str(island_visit)
 island_visit_ls <- split(island_visit, island_visit$unique_trial_ID)
-
 
 df_island <- island_visit_ls$`summer_20210803-3_T2S1`
 df_2 <- island_visit_ls[[12]]
@@ -300,3 +266,18 @@ sessions_count <- island_visit %>%
   distinct(season, id, session) %>%        
   count(season, id, name = "n_sessions")   
 
+#check for the mismatches among my observations and the pvs
+mismatch_rows <- lapply(result_final, function(df) {
+  df[df$journey == "travelling" & !is.na(df$island_debug) & df$island_debug != "", ]
+})
+
+#List of df with more than 10 mismatch
+mismatch_rows_filtered <- mismatch_rows[sapply(mismatch_rows, nrow) > 10]
+
+#check if the observations from the pv have been all manually analysed
+result %>% summarise(unique_trial_ID = n_distinct(unique_trial_ID))
+island_visit %>% summarise(unique_trial_ID = n_distinct(unique_trial_ID))
+missing_ids <- setdiff(result$unique_trial_ID, island_visit$unique_trial_ID)
+missing_table <- data.frame(unique_trial_ID = missing_ids)
+
+write.csv(missing_table, "missing_ids.csv", row.names = FALSE)
