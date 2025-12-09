@@ -23,3 +23,5 @@ The results of the first tracking gave the coordinates of the position of the an
 1. `foraging.R` enable to merge the tracking data from Trex and the island visit data manually recorded.
 2. `trajectory_debug.R` solves some problem on the trajectory of the shrew movement.
 3. `mismatch_solving.R` solves the mismatches between the tracking observation from Trex and the island visits manually registered.
+4. `mismatch_solving_correct coord.R` solves the mismatches between the tracking observation from Trex and the island visits manually registered with the right coordinates.
+5. `foraging_no_frame_adj.R` enable to merge the dat abut without the trajectory adjustments that produce the mismatches.
