@@ -11,7 +11,7 @@ library(dplyr)
 
 # Load and tidy data ----
 tracking <- read.csv(here("csv/merged.csv")) %>%
-  #rename(season = ID, ID = trial, trial = season) %>%
+  rename(season = ID, ID = trial, trial = season) %>%
   mutate(season = tolower(season))  
   
 cmperpixel = 0.187192

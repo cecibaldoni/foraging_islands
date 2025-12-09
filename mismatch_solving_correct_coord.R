@@ -134,7 +134,6 @@ track_save <- track_sf_2 %>%
   relocate(y, .after = unique_trial_ID) %>%
   relocate(unique_trial_ID, .before = ID)
 
-# --- Save output ---
 file_path <- here("csv", "foraging_results.csv")
 
 # Here I join my manual observations
@@ -144,42 +143,31 @@ final_result <- track_save %>%
   left_join(island_visit, by = c("unique_trial_ID", "frame"))
 
 # Plot
-
-# i = a single dataframe
 i <- final_result 
 
-# Prepare islands coordinates
 islands <- coords %>%
   filter(unique_trial_ID == unique(i$unique_trial_ID)) %>%
   select(4:11, 14) %>%
   mutate(across(everything(), ~ as.numeric(as.character(.))))
 
-# Ensure x and y are numeric
 i <- i %>%
   mutate(across(c(x, y), ~ as.numeric(as.character(.))))
 
-# Make the plot
 ggplot(i, aes(x = x, y = y, colour = frame)) +
   ggtitle(unique(i$unique_trial_ID)) +
   
-  # Add island points
   geom_point(data = islands, aes(x = A_x, y = A_y), size = 10, colour = "red") +
   geom_point(data = islands, aes(x = B_x, y = B_y), size = 10, colour = "blue") +
   geom_point(data = islands, aes(x = C_x, y = C_y), size = 10, colour = "green") +
   geom_point(data = islands, aes(x = D_x, y = D_y), size = 10, colour = "gold") +
   
-  # Trajectory path
   geom_path() +
   
-  # Points with food info
   geom_point(aes(x = x, y = y),
              shape = 4, size = 4,
              color = ifelse(i$food == 1, "green", "red")) +
+    scale_y_reverse() +
   
-  # Flip y axis if needed
-  scale_y_reverse() +
-  
-  # Remove axis labels/ticks
   theme(axis.title.x = element_blank(),
         axis.text.x = element_blank(),
         axis.ticks.x = element_blank(),
