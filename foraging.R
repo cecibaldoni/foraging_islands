@@ -36,11 +36,13 @@ tracking <- tracking %>%
 
 foraging_ls <- split(tracking, tracking$unique_trial_ID)
 
-# TO DO ----
+island_visit <- read.csv(here("csv/island_visit_FR.csv"))
 
-#Add merging logic here, once the island_visit.csv is ready
-#Once the merging is done, then the smoothing and cleaning of the dataset can work out
-
+result_final <- map(foraging_ls, function(df) {
+  df %>%
+    mutate(frame = as.integer(frame)) %>%
+    left_join(island_visit, by = c("unique_trial_ID", "frame"))
+})
 
 # Smooth and clean tracking data ----
 clean_trajectory <- function(data, door_x, door_y, max_jump = 20) {
@@ -171,46 +173,18 @@ result <- read.csv(here("csv/foraging_results.csv"))
 result_ls <- split(result, result$unique_trial_ID)
 
 # TO DO ---- 
-#move all the code down here to before the cleaning. The logic should still work, but keep an eyeif everything is merged correctly
+#move all the code down here to before the cleaning. The logic should still work, but keep an eye if everything is merged correctly
 
 ## Left join information from the visits of the island to the tracking results
 
-island_visit <- read.csv(here("csv/island_visit_FR.csv"))
-
-## Check if the types are the same and in case we have to edit IDs in all character columns
-island_visit <- island_visit %>%
-   mutate(across(where(is.character), ~ sub("_(\\d)_", "-\\1_", .)))
-
-## Write back to CSV (overwrite original)
-write_csv(island_visit, here("csv/island_visit_FR.csv"))
-
-result_final <- map(result_ls, function(df) {
-  df %>%
-    mutate(frame = as.integer(frame)) %>%
-    left_join(island_visit, by = c("unique_trial_ID", "frame"))
-})
-
-##check if the csv is merged with the tracking
-#check <- view(result_final[["any unique trial ID"]])
-
-#check for the mismatches among my observations and the pvs
-mismatch_rows <- lapply(result_final, function(df) {
-  df[df$journey == "travelling" & !is.na(df$island_debug) & df$island_debug != "", ]
-})
-
-#List of df with more than 10 mismatch
-mismatch_rows_filtered <- mismatch_rows[sapply(mismatch_rows, nrow) > 10]
-
-#check if the observations from the pv have been all manually analysed
-result %>% summarise(unique_trial_ID = n_distinct(unique_trial_ID))
-island_visit %>% summarise(unique_trial_ID = n_distinct(unique_trial_ID))
-missing_ids <- setdiff(result$unique_trial_ID, island_visit$unique_trial_ID)
-missing_table <- data.frame(unique_trial_ID = missing_ids)
-
-write.csv(missing_table, "missing_ids.csv", row.names = FALSE)
-
 
 # Plots (example code) ----
+
+#Run this instead of lapply for a specific ID
+#target_id <- "summer_20210803-3_T2S1"
+#i <- result_final[[target_id]]
+#i <- result_final[[which(sapply(result_final, function(x)
+ # unique(x$unique_trial_ID) == target_id))]]
 
 lapply(head(result_final), function(i) { 
   islands <- coords %>%
@@ -245,11 +219,10 @@ lapply(head(result_final), function(i) {
   print(plot)
 })
 
+#Animated plot
 library(gganimate)
 
 df <- result_final[[which(sapply(result_final, function(df) df$unique_trial_ID[1] == "summer_20210803-3_T2S1"))]]
-
-#df <- result_final[[which(sapply(result_final, function(df) df$unique_trial_ID[1] == "spring_20201103-5_T2S1"))]]
 
 islands <- coords %>%
   filter(unique_trial_ID == df$unique_trial_ID[1]) %>%
@@ -278,25 +251,43 @@ plot <- ggplot() +
 
 animate(plot, fps = 1)
 
+
+#Various checks
 str(island_visit)
 island_visit_ls <- split(island_visit, island_visit$unique_trial_ID)
-
-
 df_island <- island_visit_ls$`summer_20210803-3_T2S1`
 df_2 <- island_visit_ls[[12]]
 str(df_island)
 str(df)
-
 island_visit <- read.csv(here("csv/island_visit_FR.csv"))
 island_separate <- island_visit %>%
   separate(unique_trial_ID, into = c("season", "ID", "session"), sep = "_")
+
 #check for the observation per session in each season
 obs_count <- island_visit %>% 
   separate(unique_trial_ID, into = c("season", "ID", "session"), sep = "_") %>%
   count(season, session, name = "n_observations")
+
 #check if I analized 4 session for each individual
 sessions_count <- island_visit %>%
   separate(unique_trial_ID, into = c("season", "id", "session"), sep = "_") %>%
   distinct(season, id, session) %>%        
   count(season, id, name = "n_sessions")   
 
+##check if the csv is merged with the tracking
+check <- view(result_final[["any unique trial ID"]])
+
+#check for the mismatches among my observations and the pvs
+mismatch_rows <- lapply(result_final, function(df) {
+  df[df$journey == "travelling" & !is.na(df$island_debug) & df$island_debug != "", ]
+})
+
+#List of df with more than 10 mismatch
+mismatch_rows_filtered <- mismatch_rows[sapply(mismatch_rows, nrow) > 10]
+
+#check if the observations from the pv have been all manually analysed
+result %>% summarise(unique_trial_ID = n_distinct(unique_trial_ID))
+island_visit %>% summarise(unique_trial_ID = n_distinct(unique_trial_ID))
+missing_ids <- setdiff(result$unique_trial_ID, island_visit$unique_trial_ID)
+missing_table <- data.frame(unique_trial_ID = missing_ids)
+write.csv(missing_table, "missing_ids.csv", row.names = FALSE)
