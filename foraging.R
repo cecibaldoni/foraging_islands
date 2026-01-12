@@ -11,7 +11,7 @@ library(dplyr)
 
 # Load and tidy data ----
 tracking <- read.csv(here("csv/merged.csv")) %>%
-  rename(season = ID, ID = trial, trial = season) %>%
+ # rename(season = ID, ID = trial, trial = season) %>%
   mutate(season = tolower(season))  
   
 cmperpixel = 0.187192
@@ -36,7 +36,7 @@ tracking <- tracking %>%
 
 foraging_ls <- split(tracking, tracking$unique_trial_ID)
 
-island_visit <- read.csv(here("csv/island_visit_FR.csv"))
+island_visit <- read.csv(here("csv/island_visit.csv"))
 
 result_final <- map(foraging_ls, function(df) {
   df %>%
@@ -87,12 +87,20 @@ clean_trajectory <- function(data, door_x, door_y, max_jump = 20) {
 # Main Function ----
 
 all_ls <- lapply(foraging_ls, function(x){
+  
+  message("Processing: ", unique(x$unique_trial_ID))
+  
   door <- coords %>%
     filter(unique_trial_ID == unique(x$unique_trial_ID)) %>%
     dplyr::select(c("door_x", "door_y")) #%>%
     #st_as_sf(coords = c("door_x", "door_y"))
   
   x <- clean_trajectory(x, door$door_x[[1]], door$door_y[[1]])
+  
+  if (nrow(x) == 0) {
+    message("   ->  No data after cleaning")
+    return(NULL)
+  }
   
   door <- door %>% 
     st_as_sf(coords = c("door_x", "door_y"))
@@ -172,8 +180,7 @@ all_ls <- lapply(foraging_ls, function(x){
 result <- read.csv(here("csv/foraging_results.csv"))
 result_ls <- split(result, result$unique_trial_ID)
 
-# TO DO ---- 
-#move all the code down here to before the cleaning. The logic should still work, but keep an eye if everything is merged correctly
+df <- result_ls[[1]]
 
 ## Left join information from the visits of the island to the tracking results
 
@@ -222,7 +229,7 @@ lapply(head(result_final), function(i) {
 #Animated plot
 library(gganimate)
 
-df <- result_final[[which(sapply(result_final, function(df) df$unique_trial_ID[1] == "summer_20210803-3_T2S1"))]]
+df <- result_final[[which(sapply(result_final, function(df) df$unique_trial_ID[1] == "spring_20200804-3_T1S1"))]]
 
 islands <- coords %>%
   filter(unique_trial_ID == df$unique_trial_ID[1]) %>%
@@ -240,16 +247,16 @@ plot <- ggplot() +
   geom_point(aes(x = islands$C_x, y = islands$C_y), color = "green", size = 10) +
   geom_point(aes(x = islands$D_x, y = islands$D_y), color = "gold", size = 10) +
   geom_path(data = df, aes(x = x, y = y, group = 1, color = frame)) +
-  # geom_point(data = df_food, aes(x = x, y = y, color = factor(food)), 
-  #            shape = 4, size = 4) +
-  # scale_color_manual(values = c("red", "green")) +
+  geom_point(data = df_food, aes(x = x, y = y, color = factor(food)),
+             shape = 4, size = 4) +
+  scale_color_manual(values = c("red", "green")) +
   scale_y_reverse() +
   labs(title = 'Frame: {frame}') +
   theme_void() +
   transition_reveal(along = frame) 
  #+ ease_aes('linear')
 
-animate(plot, fps = 1)
+animate(plot, fps = 50)
 
 
 #Various checks
