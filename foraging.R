@@ -38,7 +38,8 @@ foraging_ls <- split(tracking, tracking$unique_trial_ID)
 
 island_visit <- read.csv(here("csv/island_visit.csv"))
 
-result_final <- map(foraging_ls, function(df) {
+#foraging append is the tracking with manual observation. To do before the cleaning to avoid frame mismatch.
+foraging_append <- map(foraging_ls, function(df) {
   df %>%
     mutate(frame = as.integer(frame)) %>%
     left_join(island_visit, by = c("unique_trial_ID", "frame"))
@@ -86,7 +87,7 @@ clean_trajectory <- function(data, door_x, door_y, max_jump = 20) {
 
 # Main Function ----
 
-all_ls <- lapply(foraging_ls, function(x){
+all_ls <- lapply(foraging_append, function(x){
   
   message("Processing: ", unique(x$unique_trial_ID))
   
@@ -176,24 +177,23 @@ all_ls <- lapply(foraging_ls, function(x){
   
 })
 
+
 #Write result csv
 result <- read.csv(here("csv/foraging_results.csv"))
 result_ls <- split(result, result$unique_trial_ID)
 
 df <- result_ls[[1]]
 
-## Left join information from the visits of the island to the tracking results
-
 
 # Plots (example code) ----
 
 #Run this instead of lapply for a specific ID
-#target_id <- "summer_20210803-3_T2S1"
-#i <- result_final[[target_id]]
-#i <- result_final[[which(sapply(result_final, function(x)
- # unique(x$unique_trial_ID) == target_id))]]
+target_id <- "summer_20210803-4_T1S2"
+i <- result_ls[[target_id]]
+i <- result_ls[[which(sapply(result_ls, function(x)
+  unique(x$unique_trial_ID) == target_id))]]
 
-lapply(head(result_final), function(i) { 
+lapply(head(result_ls), function(i) { 
   islands <- coords %>%
     filter(unique_trial_ID == unique(i$unique_trial_ID)) %>%
     select(4:11, 14) %>% 
@@ -203,7 +203,7 @@ lapply(head(result_final), function(i) {
     mutate(across(c(x, y), ~ as.numeric(as.character(.))))
   
   plot <- i %>% 
-    ggplot(aes(x, y, colour = frame)) +
+    ggplot(aes(x, y, group = 1, colour = frame)) +
     ggtitle(i$unique_trial_ID) +
     geom_point(data = islands, aes(x = A_x, y = A_y), size = 10, colour = "red") +
     geom_point(data = islands, aes(x = B_x, y = B_y), size = 10, colour = "blue") +
@@ -229,7 +229,7 @@ lapply(head(result_final), function(i) {
 #Animated plot
 library(gganimate)
 
-df <- result_final[[which(sapply(result_final, function(df) df$unique_trial_ID[1] == "spring_20200804-3_T1S1"))]]
+df <- result_final[[which(sapply(result_final, function(df) df$unique_trial_ID[1] == "summer_20210803-4_T1S2"))]]
 
 islands <- coords %>%
   filter(unique_trial_ID == df$unique_trial_ID[1]) %>%
@@ -285,9 +285,16 @@ sessions_count <- island_visit %>%
 check <- view(result_final[["any unique trial ID"]])
 
 #check for the mismatches among my observations and the pvs
-mismatch_rows <- lapply(result_final, function(df) {
+mismatch_rows <- lapply(result_ls, function(df) {
   df[df$journey == "travelling" & !is.na(df$island_debug) & df$island_debug != "", ]
 })
+
+mismatch_table <- data.frame(
+  df = seq_along(result_ls),
+  mismatches = sapply(result_ls, function(df) {
+    sum(df$island_debug != df$island, na.rm = TRUE)
+  })
+)
 
 #List of df with more than 10 mismatch
 mismatch_rows_filtered <- mismatch_rows[sapply(mismatch_rows, nrow) > 10]
