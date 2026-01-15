@@ -3,18 +3,10 @@ library(here)
 
 result <- read.csv(here("csv/foraging_results.csv"))
 
-#there's something off with this dataset.
-# try running the next lines 
-result %>%
-  distinct(unique_trial_ID)
-#The last rows have the L/R, and there is a double 'unique_trial_ID' in row 2
-
 foraging_master <- result %>%
   distinct(unique_trial_ID) %>%
   filter(unique_trial_ID != "unique_trial_ID") %>%
   separate(unique_trial_ID, into = c("season", "ID", "trial"),sep = "_", remove = FALSE)
-
-#I have a warning message for some NAs, check the dataset
 
 #First frame and time to baited island interaction and join
 first_success <- result %>%
@@ -28,6 +20,13 @@ foraging_master <- foraging_master %>%
 foraging_master <- foraging_master %>%
   left_join(first_success, by = "unique_trial_ID") %>%
   mutate(first_AD_time  = round(first_AD_frame * (1/24),2))
+
+# #This does not work for me?
+# Error in `mutate()`:
+#   ℹ In argument: `first_AD_time = round(first_AD_frame * (1/24), 2)`.
+# Caused by error:
+#   ! object 'first_AD_frame' not found
+# Run `rlang::last_trace()` to see where the error occurred.
 
 #Islands visited
 letter_food_counts <- result %>%

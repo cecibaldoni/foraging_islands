@@ -177,6 +177,11 @@ all_ls <- lapply(foraging_append, function(x){
   
 })
 
+#Processing: summer_20210802-3_T2S1
+# ->  No data after cleaning
+# Processing: summer_20210803-1_T1S1
+# ->  No data after cleaning
+
 
 #Write result csv
 result <- read.csv(here("csv/foraging_results.csv"))
