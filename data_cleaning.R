@@ -1,5 +1,6 @@
 library(tidyverse)
 library(here)
+library(ggdist)
 
 result <- read.csv(here("csv/foraging_results.csv"))
 
@@ -12,13 +13,15 @@ foraging_master <- result %>%
 first_success <- result %>%
   filter(island_debug %in% c("A", "D")) %>%
   filter(unique_trial_ID != "unique_trial_ID") %>% 
+  mutate(frame = as.numeric(frame)) %>%
   group_by(unique_trial_ID) %>%
-  summarise(first_AD_frame = as.numeric (min(frame, na.rm = TRUE)),.groups = "drop")
+  slice_min(frame, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  transmute(unique_trial_ID, first_AD_frame = frame, first_AD_island = island_debug, first_AD_door = place)
 
 foraging_master <- foraging_master %>%
   left_join(first_success, by = "unique_trial_ID") %>%
-  mutate(first_AD_time = round(first_AD_frame / 29, 2))
-
+  mutate(first_AD_time = round(first_AD_frame / 30, 2))
 
 #Islands visited
 letter_food_counts <- result %>%
@@ -29,9 +32,6 @@ letter_food_counts <- result %>%
   summarise(count = n(), .groups = "drop") %>%
   unite(letter_food, island_debug, food, sep = "_") %>%
   pivot_wider(names_from = letter_food, values_from = count, values_fill = 0)
-
-letter_food_counts <- letter_food_counts %>%
-  select(-B_1)  # Removes the column named B_1 because there should not be any (typo)
 
 foraging_master <- foraging_master %>%
   left_join(letter_food_counts, by = "unique_trial_ID")
@@ -45,7 +45,7 @@ travelling_counts <- result %>%
 
 foraging_master <- foraging_master %>%
   left_join(travelling_counts, by = "unique_trial_ID") %>%
-  mutate(travelling_time = round(travelling_frames / 29, 2))
+  mutate(travelling_time = round(travelling_frames / 30, 2))
 
 #Island time
 result <- result %>%
@@ -63,23 +63,65 @@ foraging_master <- foraging_master %>%
   mutate(island_frame = last_frame - travelling_frames)
 
 foraging_master <- foraging_master %>%
-  mutate(islands_time = round(island_frame * (1/29), 2))
+  mutate(islands_time = round(island_frame * (1/30), 2))
 
 #Time not moving
 foraging_master <- foraging_master %>% 
   mutate(nonmoving_frames = 43200 - last_frame)
 
 foraging_master <- foraging_master %>% 
-  mutate (nonmoving_time = round(nonmoving_frames * (1/24),2))
+  mutate (nonmoving_time = round(nonmoving_frames * (1/30),2))
 
 
 #Ordering the columns
 foraging_master <- foraging_master %>%
-  select(unique_trial_ID, season, ID, trial, first_AD_frame, first_AD_time, A_0, A_1, B_0, C_0, D_0, D_1,travelling_frames,
+  select(unique_trial_ID, season, ID, trial, first_AD_frame, first_AD_time, first_AD_island, first_AD_door, A_0, A_1, B_0, C_0, D_0, D_1,travelling_frames,
          travelling_time,island_frame, islands_time, nonmoving_frames, nonmoving_time, last_frame)
 
 #Save csv
 write.csv( foraging_master, here("csv", "foraging_master.csv"),row.names = FALSE)
+
+#Island and door interactions
+position_counts <- result %>%
+  distinct(unique_trial_ID) %>%
+  filter(unique_trial_ID != "unique_trial_ID") %>%
+  separate(unique_trial_ID, into = c("season", "ID", "trial"),sep = "_", remove = FALSE)
+
+place_counts <- result %>%
+  filter(!is.na(island_debug), !is.na(place)) %>%
+  filter(unique_trial_ID != "unique_trial_ID") %>%
+  count(unique_trial_ID, island_debug, place, name = "n") %>%
+  mutate(col_name = paste0(island_debug, "_", place)) %>%
+  select(unique_trial_ID, col_name, n) %>%
+  pivot_wider(names_from = col_name, values_from = n, values_fill = 0)
+
+position_counts <- position_counts %>%
+  left_join(place_counts, by = "unique_trial_ID")
+
+#Save csv
+write.csv( position_counts, here("csv", "position_counts.csv"),row.names = FALSE)
+
+#Plot the position interaction with the trial
+# pivot A_1, A_2, etc. into long format
+A_long <- position_counts %>%
+  select(trial, season, starts_with("A_")) %>%
+  pivot_longer(
+    cols = starts_with("A_"),
+    names_to = "A_position",
+    values_to = "count")
+
+ggplot(A_long, aes(x = A_position, y = trial, color = season, size = count)) +
+  geom_point(alpha = 0.7) +
+  scale_color_manual(values = c("spring" = "green", "summer" = "orange", "winter" = "purple")) +
+  labs(
+    x = "Position",
+    y = "Trial",
+    color = "Season",
+    size = "Count"
+  ) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
 
 
 #Plots
@@ -109,3 +151,15 @@ ggplot(foraging_master, aes(x = season_trial, y = first_AD_time)) +
   theme_minimal(base_size = 14) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+
+#Plot the first island A/D and which door is opened
+ggplot(foraging_master %>% filter(!is.na(first_AD_island)),
+  aes(x = first_AD_island, y = first_AD_time, fill = factor(first_AD_door))) +
+  # half violin
+  #geom_violin(position = position_dodge(width = 0.8), alpha = 0.5, trim = FALSE) +
+  # boxplot
+  geom_boxplot(width = 0.15, position = position_dodge(width = 0.8), outlier.shape = NA, alpha = 0.7) +
+  # jittered points ("rain")
+  geom_jitter(position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.8), size = 1, alpha = 0.4) +
+  labs(x = "First A/D Island", y = "Time to First A/D (s)", fill = "Door") +
+  theme_classic()
