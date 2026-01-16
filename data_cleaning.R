@@ -11,22 +11,14 @@ foraging_master <- result %>%
 #First frame and time to baited island interaction and join
 first_success <- result %>%
   filter(island_debug %in% c("A", "D")) %>%
+  filter(unique_trial_ID != "unique_trial_ID") %>% 
   group_by(unique_trial_ID) %>%
   summarise(first_AD_frame = as.numeric (min(frame, na.rm = TRUE)),.groups = "drop")
 
 foraging_master <- foraging_master %>%
-  left_join(first_success, by = "unique_trial_ID")
-
-foraging_master <- foraging_master %>%
   left_join(first_success, by = "unique_trial_ID") %>%
-  mutate(first_AD_time  = round(first_AD_frame * (1/24),2))
+  mutate(first_AD_time = round(first_AD_frame / 29, 2))
 
-# #This does not work for me?
-# Error in `mutate()`:
-#   ℹ In argument: `first_AD_time = round(first_AD_frame * (1/24), 2)`.
-# Caused by error:
-#   ! object 'first_AD_frame' not found
-# Run `rlang::last_trace()` to see where the error occurred.
 
 #Islands visited
 letter_food_counts <- result %>%
@@ -52,10 +44,8 @@ travelling_counts <- result %>%
   summarise(travelling_frames = sum(journey == "travelling"), .groups = "drop")
 
 foraging_master <- foraging_master %>%
-  left_join(travelling_counts, by = "unique_trial_ID")
-
-foraging_master <- foraging_master %>%
-  mutate(travelling_time = round(travelling_frames * (1/24), 2))
+  left_join(travelling_counts, by = "unique_trial_ID") %>%
+  mutate(travelling_time = round(travelling_frames / 29, 2))
 
 #Island time
 result <- result %>%
@@ -73,7 +63,7 @@ foraging_master <- foraging_master %>%
   mutate(island_frame = last_frame - travelling_frames)
 
 foraging_master <- foraging_master %>%
-  mutate(islands_time = round(island_frame * (1/24), 2))
+  mutate(islands_time = round(island_frame * (1/29), 2))
 
 #Time not moving
 foraging_master <- foraging_master %>% 
