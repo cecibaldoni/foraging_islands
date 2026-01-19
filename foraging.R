@@ -52,7 +52,9 @@ clean_trajectory <- function(data, door_x, door_y, max_jump = 20) {
            before_close = cumsum(dist_from_door <= 15) == 0) %>%
     filter(!before_close) %>%
     select(-dist_from_door, -before_close) %>%
-    mutate(frame = row_number())  # Re-number frames after filtering
+    mutate(frame = row_number) # Re-number frames after filtering
+  
+          
   
   # detect and fix clusters of jumps
   data <- data %>%
