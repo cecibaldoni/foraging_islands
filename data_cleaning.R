@@ -3,7 +3,8 @@ library(here)
 library(ggdist)
 library(trajr)
 
-result <- read.csv(here("csv/foraging_results.csv"))
+result <- read.csv(here("csv/processed/foraging_results.csv"))
+master <- read.csv(here('csv/processed/foraging_master.csv'))
 
 foraging_master <- result %>%
   distinct(unique_trial_ID) %>%
@@ -23,6 +24,19 @@ first_success <- result %>%
 foraging_master <- foraging_master %>%
   left_join(first_success, by = "unique_trial_ID") %>%
   mutate(first_AD_time = round(first_AD_frame / 30, 2))
+
+first_success <- result %>%
+  filter(island_debug %in% c("A", 'B', 'C', "D")) %>%
+  filter(unique_trial_ID != "unique_trial_ID") %>% 
+  mutate(frame = as.numeric(frame)) %>%
+  group_by(unique_trial_ID) %>%
+  slice_min(frame, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  transmute(unique_trial_ID, first_island_frame = frame, first_island = island_debug, first_door = place)
+
+foraging_master <- foraging_master %>%
+  left_join(first_success, by = "unique_trial_ID") %>%
+  mutate(first_island_time = round(first_island_frame / 30, 2))
 
 #Islands visited
 letter_food_counts <- result %>%
@@ -168,6 +182,7 @@ metrics_to_join <- results_df %>%
 foraging_master <- foraging_master %>%
   left_join(metrics_to_join, by = "unique_trial_ID")
 
+
 #Save csv
 write.csv( foraging_master, here("csv", "foraging_master.csv"),row.names = FALSE)
 
@@ -195,16 +210,16 @@ counts <- foraging_master %>%
   group_by(season) %>%
   summarise(n = sum(!is.na(first_AD_time))) 
 
-ggplot(foraging_master, aes(x = season, y = first_AD_time)) +
-  geom_violin(fill = "skyblue", color = "black", alpha = 0.3, trim = FALSE) +
+ggplot(foraging_master, aes(x = season_trial, y = first_AD_time)) +
+  #geom_violin(fill = "skyblue", color = "black", alpha = 0.3, trim = FALSE) +
   geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
-  geom_jitter(width = 0.15, size = 2, alpha = 0.7, color = "darkblue") +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.7, color = "blue") +
   labs(x = "Season", y = "Time to first baited island (seconds)", title = "Raincloud plot of First AD Time by Season") +
-  theme_minimal(base_size = 14)
-
+  theme_minimal(base_size = 14)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 #Plot the time to reach the first successful island per trial per season
-foraging_master <- foraging_master %>%
+foraging_master <- master %>%
   mutate(trial = factor(trial, levels = c("T1S1", "T1S2", "T2S1", "T2S2")),
     season_trial = factor(paste(season, trial, sep = "_"),
     levels = c("spring_T1S1", "spring_T1S2", "spring_T2S1", "spring_T2S2",

@@ -4,10 +4,9 @@ library(tidyverse)
 library(sf)
 # library(mapview)
 library(parallel)
-library(ggplot2)
 library(gganimate)
 library(here)
-library(dplyr)
+library(trajr)
 
 # Load and tidy data ----
 tracking <- read.csv(here("csv/merged.csv")) %>%
@@ -112,7 +111,7 @@ master_file <- here("csv/processed", "foraging_master.csv")
 
 all_ls <- lapply(foraging_append, function(x){
   ## to try the loop with only one list element, run the next line
-  x = foraging_append[[1]]
+  # x = foraging_append[[1]]
   message("Processing: ", unique(x$unique_trial_ID))
   
   door <- coords %>%
@@ -136,7 +135,7 @@ all_ls <- lapply(foraging_append, function(x){
   hex_ls <- list()
   islands_buffer <- list()
   
-  for (island in islands) {
+  for (island in islands_ref) {
     filtered_coords <- coords %>%
       filter(unique_trial_ID == unique(x$unique_trial_ID)) %>%
       dplyr::select(paste0(island, "_x"), paste0(island, "_y")) %>%
@@ -169,7 +168,7 @@ all_ls <- lapply(foraging_append, function(x){
     st_as_sf(coords = c("x", "y"))
   
   intersection_df <- data.frame()
-  for (island in islands) {
+  for (island in islands_ref) {
     at_island <- track_sf %>%
       #st_intersection(hex_ls[[island]]) %>%
       st_intersection(islands_buffer[[island]]) %>% 
@@ -186,6 +185,7 @@ all_ls <- lapply(foraging_append, function(x){
     full_join(intersection_df[c("frame", "island", "visit_seq")], by = "frame") %>% 
     arrange(frame) %>% 
     mutate(journey = ifelse(!is.na(island), paste0("at_", island, "_", visit_seq), "travelling"))
+  
   
   track_save <- track_sf_2 %>% 
     extract(geometry, c('x', 'y'), '\\((.*), (.*)\\)', convert = TRUE) %>% 
@@ -234,8 +234,8 @@ all_ls <- lapply(foraging_append, function(x){
     trial              = x$trial[1],
     #add metrics
     first_AD_time      = if(nrow(first_ad) > 0) round(first_ad$frame[1] / 30, 2) else NA,
-    distance_total_cm  = if(!is.null(traj_all)) round(trajr::TrajLength(traj_all), 2) else NA,
-    straightness_total = if(!is.null(traj_all)) round(trajr::TrajStraightness(traj_all), 5) else NA,
+    distance_total_cm  = if(!is.null(traj_all)) round(TrajLength(traj_all), 2) else NA,
+    straightness_total = if(!is.null(traj_all)) round(TrajStraightness(traj_all), 5) else NA,
     travelling_time    = round(sum(track_save$journey == "travelling") / 30, 2),
     moving_time        = round(max(track_save$frame) / 30, 2),
     nonmoving_time     = round((43200 - max(track_save$frame)) / 30, 2))
