@@ -218,6 +218,7 @@ all_ls <- lapply(foraging_append, function(x){
   if (length(missing_cols) > 0) {
     island_counts[missing_cols] <- 0
   }
+  #FIX THE 24 DOORS RESULT
   
   #fix the column order, to avoid errors later
   island_counts <- island_counts %>% select(all_of(all_possible_islands))

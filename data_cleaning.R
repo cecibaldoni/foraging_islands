@@ -110,10 +110,44 @@ place_counts <- result %>%
 position_counts <- position_counts %>%
   left_join(place_counts, by = "unique_trial_ID")
 
-#Save csv
-write.csv( position_counts, here("csv", "position_counts.csv"),row.names = FALSE)
+position_counts <- position_counts %>%
+  mutate(unique_ID = sub("_[^_]+$", "", unique_trial_ID))
 
-# ----- Loop trial -----
+#------- Loop for trials ----
+
+expected_trials <- c("T1S1", "T1S2", "T2S1", "T2S2")
+
+unique_ids <- unique(position_counts$unique_ID)
+
+trial_ls <- lapply(unique_ids, function(uid) {
+df_id <- position_counts %>% 
+  filter (unique_ID == uid) %>% 
+  arrange (trial)
+
+message('Processing: ', uid)
+
+found_trials <- df_id$trial
+n_trials <- length(found_trials)
+
+if (n_trials != 4) {missing <- setdiff(expected_trials, found_trials)
+  message("   -> Warning: ", n_trials, " trial(s) found. Missing trial(s): ", paste(missing, collapse = ", "))}
+
+return(df_id)})
+
+names(trial_ls) <- unique_ids
+
+#Missing trial list
+missing_trials_df <- position_counts %>%
+  group_by(unique_ID) %>%
+  summarise(found_trials = list(trial), .groups = "drop") %>%
+  mutate(missing_trials = lapply(found_trials, function(x) setdiff(expected_trials, x))) %>%
+  select(unique_ID, missing_trials) %>%
+  unnest(missing_trials) 
+
+#Save csv
+write.csv( position_counts, here("csv/processed", "position_counts.csv"),row.names = FALSE)
+
+# ----- Loop trial for trajr -----
 df_trajectory <- result %>%
   select(unique_trial_ID, season, ID, trial, time, x, y, journey) %>%
   mutate(time = as.numeric(time)) %>%
