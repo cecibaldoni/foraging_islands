@@ -2,6 +2,7 @@ library(tidyverse)
 library(here)
 library(ggdist)
 library(trajr)
+library(purrr)
 
 result <- read.csv(here("csv/processed/foraging_results.csv"))
 master <- read.csv(here('csv/processed/foraging_master.csv'))
@@ -80,10 +81,10 @@ foraging_extr <- foraging_extr %>%
   mutate(islands_time = round(island_frame * (1/30), 2))
 #Time not moving
 foraging_extr <- foraging_extr %>% 
-  mutate(nonmoving_frames = 43200 - last_frame)
+  mutate(nonmoving_frames = (54000 - last_frame))
 
 foraging_extr <- foraging_extr %>% 
-  mutate (nonmoving_time = round(nonmoving_frames * (1/30), 2))
+  mutate (nonmoving_time = pmax(round(nonmoving_frames * (1/30), 2), 0))
 #Time moving
 foraging_extr <- foraging_extr %>% 
   mutate(moving_time = round(last_frame * 30, 2))
@@ -135,6 +136,37 @@ if (n_trials != 4) {missing <- setdiff(expected_trials, found_trials)
 return(df_id)})
 
 names(trial_ls) <- unique_ids
+
+#Success rate
+#Find AD
+doors_AD <- function(df) {
+  grep("^(A|D)_", names(df), value = TRUE)
+}
+#Process each id
+trial_ls_processed <- map(trial_ls, function(df) {
+  df = trial_ls[[2]]
+   ad_cols <- doors_AD(df)
+#~ .x & !lag(.x) This means: count it if it is used now and if it was NOT used in the previous session 
+  df %>%
+    arrange(trial) %>%
+    mutate(across(all_of(ad_cols), ~ .x != 0)) %>%
+    mutate(across(all_of(ad_cols), ~ case_when(
+          trial %in% c("T1S1", "T2S1") ~ .x,
+          trial %in% c("T1S2", "T2S2") ~ .x & !lag(.x),
+          TRUE ~ FALSE),.names = "count_{.col}")) %>%
+    rowwise() %>%
+    mutate(door_count = sum(c_across(starts_with("count_")), na.rm = TRUE)) %>%
+    ungroup()
+}) 
+
+trial_ls_processed <- map(trial_ls_processed, function(df) {
+  df %>%
+    arrange(trial) %>%
+    mutate(door_norm = case_when(trial %in% c("T1S1", "T2S1") ~ door_count / 12,
+        trial %in% c("T1S2", "T2S2") ~
+          door_count / (12 - lag(door_count))))
+})
+
 
 #Missing trial list
 missing_trials_df <- position_counts %>%
