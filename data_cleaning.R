@@ -144,10 +144,10 @@ doors_AD <- function(df) {
 }
 #Process each id
 trial_ls_processed <- map(trial_ls, function(df) {
-  df = trial_ls[[2]]
+  #df = trial_ls[[17]]
    ad_cols <- doors_AD(df)
 #~ .x & !lag(.x) This means: count it if it is used now and if it was NOT used in the previous session 
-  df %>%
+  df <- df %>%
     arrange(trial) %>%
     mutate(across(all_of(ad_cols), ~ .x != 0)) %>%
     mutate(across(all_of(ad_cols), ~ case_when(
@@ -157,10 +157,8 @@ trial_ls_processed <- map(trial_ls, function(df) {
     rowwise() %>%
     mutate(door_count = sum(c_across(starts_with("count_")), na.rm = TRUE)) %>%
     ungroup()
-}) 
-
-trial_ls_processed <- map(trial_ls_processed, function(df) {
-  df %>%
+   
+  df <- df  %>%
     arrange(trial) %>%
     mutate(door_norm = case_when(trial %in% c("T1S1", "T2S1") ~ door_count / 12,
         trial %in% c("T1S2", "T2S2") ~
@@ -327,5 +325,3 @@ ggplot(foraging_extr, aes(x = distance_total_cm)) +
                  color = "black") +
   geom_density(color = "red", linewidth = 1) +
   theme_minimal()
-
-trial
