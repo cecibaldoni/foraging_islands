@@ -327,3 +327,5 @@ ggplot(foraging_extr, aes(x = distance_total_cm)) +
                  color = "black") +
   geom_density(color = "red", linewidth = 1) +
   theme_minimal()
+
+trial
