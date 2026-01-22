@@ -247,11 +247,6 @@ all_ls <- lapply(foraging_append, function(x){
     master_row <- bind_cols(master_row, island_counts %>% select(-any_of("unique_trial_ID")))
   }
   
-  #TODO: Think if you need more information. 
-  # EXAMPLE 1: Instead of First AD, why not check the first island visited regardless? If you have that information in a column, it's easy to filter A and D inside that. While if you have it already filtered, you don't know if they went to the empty islands before going in the baited one
-  # EXAMPLE 2: would it be possible to investigate the instances at each position (A1, vs C4) and how many times it happened and when? this maybe is already possible, I didn't think about it yet
-  
-  
   # save to Master CSV
   write.table(master_row, file = master_file, append = TRUE, sep = ",", 
               col.names = !file.exists(master_file), row.names = FALSE)
