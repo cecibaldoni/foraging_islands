@@ -48,42 +48,32 @@ foraging_append <- map(foraging_ls, function(df) {
 clean_trajectory <- function(data, door_x, door_y, max_jump = 20) {
   data <- data %>%
     mutate(dist_from_door = sqrt((x - door_x)^2 + (y - door_y)^2),
-           before_close = cumsum(dist_from_door <= 15) == 0) %>%
+           before_close = cumsum(dist_from_door > 10) == 0) %>%
     filter(!before_close) %>%
-    select(-dist_from_door, -before_close) %>%
-    mutate(frame = row_number(), # re-number frames after filtering
-           time = (frame - 1) / 30) #re-number time after filtering 
+    mutate(frame_seq = row_number(), 
+           time = (frame_seq - 1) / 30)
   
-          
+  if(nrow(data) == 0) return(data)
   
-  # detect and fix clusters of jumps
-  data <- data %>%
-    mutate(x_lag = lag(x, default = first(x)),
-           y_lag = lag(y, default = first(y)),
-           dist = sqrt((x - x_lag)^2 + (y - y_lag)^2),
-           is_jump = dist > max_jump) %>%
-    mutate(is_jump = replace_na(is_jump, FALSE))
-  
+  # Anchor logic
   anchor_x <- data$x[1]
   anchor_y <- data$y[1]
   
   for (i in seq_len(nrow(data))) {
-    if (data$is_jump[i]) {
-      for (j in i:nrow(data)) {
-        dist_to_anchor <- sqrt((data$x[j] - anchor_x)^2 + (data$y[j] - anchor_y)^2)
-        if (dist_to_anchor <= max_jump) {
-          break
-        } else {
-          data$x[j] <- anchor_x
-          data$y[j] <- anchor_y
-        }
-      }
+    # Calculate distance from the LAST KNOWN GOOD position
+    dist_to_prev <- sqrt((data$x[i] - anchor_x)^2 + (data$y[i] - anchor_y)^2)
+    
+    # If the jump is physically impossible for a shrew in 1/30th of a second
+    if (dist_to_prev > max_jump) {
+      # HOLD the anchor (stay at the last good spot)
+      data$x[i] <- anchor_x
+      data$y[i] <- anchor_y
     } else {
+      # UPDATE the anchor (this was a valid move)
       anchor_x <- data$x[i]
       anchor_y <- data$y[i]
     }
   }
-  data <- data %>% select(-x_lag, -y_lag, -dist, -is_jump)
   return(data)
 }
 
@@ -93,7 +83,8 @@ safe_traj <- function(df) {
   df <- df %>% filter(!is.na(x), !is.na(y), !is.na(time))
   if (nrow(df) < 2) return(NULL)
   
-  TrajFromCoords(df, xCol = "x", yCol = "y", fps = 30)
+  # trajr uses the 'time' column we just recalculated
+  TrajFromCoords(df, xCol = "x", yCol = "y", timeCol = "time")
 }
 
 #define all possible combinations of islands and locations (from A to D, from 1 to 6: 24 combinations)
@@ -111,7 +102,8 @@ master_file <- here("csv/processed", "foraging_master.csv")
 
 all_ls <- lapply(foraging_append, function(x){
   ## to try the loop with only one list element, run the next line
-  # x = foraging_append[[1]]
+  #x = foraging_append[["summer_20210803-4_T1S2"]]
+  #x = foraging_append[[17]]
   message("Processing: ", unique(x$unique_trial_ID))
   
   door <- coords %>%
@@ -132,7 +124,7 @@ all_ls <- lapply(foraging_append, function(x){
   door_buffer <- door %>%
     st_buffer(dist = 4)
   
-  hex_ls <- list()
+  #hex_ls <- list()
   islands_buffer <- list()
   
   for (island in islands_ref) {
@@ -140,7 +132,8 @@ all_ls <- lapply(foraging_append, function(x){
       filter(unique_trial_ID == unique(x$unique_trial_ID)) %>%
       dplyr::select(paste0(island, "_x"), paste0(island, "_y")) %>%
       mutate(!!paste0(island, "_x") := as.numeric(!!sym(paste0(island, "_x"))),
-        !!paste0(island, "_y") := as.numeric(!!sym(paste0(island, "_y"))))
+             !!paste0(island, "_y") := as.numeric(!!sym(paste0(island, "_y"))))
+    
     center <- as.numeric(filtered_coords[1, ])
     distance <- 9
     hex_coords <- matrix(nrow = 6, ncol = 2)
@@ -150,11 +143,14 @@ all_ls <- lapply(foraging_append, function(x){
     }
     hex_closed <- rbind(hex_coords, hex_coords[1, ])
     hex_sf <- st_polygon(list(hex_closed))
-    hex_ls[[island]] <- hex_sf
-    island_buffer <- hex_sf %>%
-      st_buffer(dist = 4)
-    islands_buffer[[island]] <- island_buffer
+    
+    islands_buffer[[island]] <- st_sfc(st_buffer(hex_sf, dist = 6), crs = st_crs(NA))
+
   }
+  
+  all_islands_sf <- data.frame(island = names(islands_buffer)) %>%
+    mutate(geometry = do.call(c, islands_buffer)) %>%
+    st_as_sf()
   
   x <- x %>%
     arrange(frame) %>%
@@ -165,33 +161,18 @@ all_ls <- lapply(foraging_append, function(x){
     select(-x_lag, -y_lag, -dist)
   
   track_sf <- x %>%
-    st_as_sf(coords = c("x", "y"))
+    st_as_sf(coords = c("x", "y"), remove = FALSE, crs = st_crs(NA))
   
-  intersection_df <- data.frame()
-  for (island in islands_ref) {
-    at_island <- track_sf %>%
-      #st_intersection(hex_ls[[island]]) %>%
-      st_intersection(islands_buffer[[island]]) %>% 
-      as.data.frame() %>%
-      arrange(frame) %>%
-      mutate(island = island) %>%
-      mutate(timediff = frame - lag(frame)) %>%
-      mutate(new_timediff = ifelse(is.na(timediff) | timediff != 1, 1, 0)) %>%
-      mutate(visit_seq = cumsum(new_timediff))
-    intersection_df <- rbind(intersection_df, at_island)
-  }
+  track_joined <- st_join(track_sf, all_islands_sf, join = st_intersects)
   
-  track_sf_2 <- track_sf %>%
-    full_join(intersection_df[c("frame", "island", "visit_seq")], by = "frame") %>% 
-    arrange(frame) %>% 
-    mutate(journey = ifelse(!is.na(island), paste0("at_", island, "_", visit_seq), "travelling"))
-  
-  
-  track_save <- track_sf_2 %>% 
-    extract(geometry, c('x', 'y'), '\\((.*), (.*)\\)', convert = TRUE) %>% 
-    relocate(x, .after = frame) %>% 
-    relocate(y, .after = x) %>% 
-    relocate(unique_trial_ID, .before = ID)
+  track_save <- track_joined %>%
+    st_drop_geometry() %>%  # This keeps your original x (108.9) and y (74.9)
+    arrange(frame) %>%
+    mutate(timediff = frame - lag(frame),
+           island_change = island != lag(island) | is.na(lag(island)) != is.na(island),
+           new_visit = ifelse(is.na(timediff) | timediff != 1 | island_change, 1, 0),
+           visit_seq = cumsum(replace_na(new_visit, 0)),
+           journey = ifelse(!is.na(island), paste0("at_", island, "_", visit_seq), "travelling"))
   
   
   write.table(track_save, file = results_file, 
@@ -203,51 +184,61 @@ all_ls <- lapply(foraging_append, function(x){
   # first time at A or D
   first_ad <- track_save %>%
     filter(island %in% c("A", "D")) %>%
-    slice_min(frame, n = 1, with_ties = FALSE)
+    slice_min(frame_seq, n = 1, with_ties = FALSE)
   
   # Island/Food Counts (A_0, A_1, etc.)
   island_counts <- track_save %>%
-    filter(!is.na(island), !is.na(food)) %>%
-    count(island, food) %>%
-    mutate(col_name = paste0(island, "_", food)) %>%
-    select(col_name, n) %>%
-    tidyr::pivot_wider(names_from = col_name, values_from = n, values_fill = 0)
+    filter(!is.na(island_debug), !is.na(place)) %>%
+    # 'visit_id' that increments only when the location actually changes
+    mutate(loc_change = island_debug != lag(island_debug) | 
+             place != lag(place) | 
+             is.na(lag(island_debug)),
+           manual_visit_id = cumsum(as.numeric(replace_na(loc_change, FALSE)))) %>%
+    # Group by this ID so we only count the instance once
+    group_by(manual_visit_id, island_debug, place) %>%
+    slice(1) %>% 
+    ungroup() %>%
+    # Now count how many unique instances occurred for each Island_Place combo
+    count(island_debug, place) %>%
+    mutate(col_name = paste0(island_debug, "_", place)) %>%
+    dplyr::select(col_name, n)
   
-  #add all the 24 possible combinations into 24 columns, even if they were not visited
+  if (nrow(island_counts) > 0) {
+    island_counts <- island_counts %>% 
+      tidyr::pivot_wider(names_from = col_name, values_from = n, values_fill = 0)
+  } else {
+    island_counts <- data.frame(matrix(ncol = 0, nrow = 1))
+  }
+  
   missing_cols <- setdiff(all_possible_islands, names(island_counts))
   if (length(missing_cols) > 0) {
     island_counts[missing_cols] <- 0
   }
-  #FIX THE 24 DOORS RESULT
   
-  #fix the column order, to avoid errors later
   island_counts <- island_counts %>% select(all_of(all_possible_islands))
   
   # trajectory metrics (with the function defined before the loop)
   traj_all <- safe_traj(track_save)
   
   #compile the Master df
-  master_row <- data.frame(
-    #add info columns
-    unique_trial_ID    = x$unique_trial_ID[1],
-    season             = x$season[1],
-    ID                 = x$ID[1],
-    trial              = x$trial[1],
-    #add metrics
-    first_AD_time      = if(nrow(first_ad) > 0) round(first_ad$frame[1] / 30, 2) else NA,
-    distance_total_cm  = if(!is.null(traj_all)) round(TrajLength(traj_all), 2) else NA,
-    straightness_total = if(!is.null(traj_all)) round(TrajStraightness(traj_all), 5) else NA,
-    travelling_time    = round(sum(track_save$journey == "travelling") / 30, 2),
-    moving_time        = round(max(track_save$frame) / 30, 2),
-    nonmoving_time     = round((43200 - max(track_save$frame)) / 30, 2))
+  master_row <- data.frame(unique_trial_ID    = x$unique_trial_ID[1],
+                           season             = x$season[1],
+                           ID                 = x$ID[1],
+                           trial              = x$trial[1],
+                           first_AD_time      = if(nrow(first_ad) > 0) round(first_ad$time[1], 2) else NA,
+                           distance_total_cm  = if(!is.null(traj_all)) round(TrajLength(traj_all), 2) else NA,
+                           straightness_total = if(!is.null(traj_all)) round(TrajStraightness(traj_all), 5) else NA,
+                           travelling_time    = round(sum(track_save$journey == "travelling") / 30, 2),
+                           # moving time is the very lat row of time, I don't know what the commented line is doing
+                           #moving_time        = round(max(track_save$frame_seq) / 30, 2),
+                           moving_time     = round(max(track_save$time, na.rm = TRUE), 2),
+                           # Non-moving time is 30-minute (1800s) - moving_time
+                           nonmoving_time  = round(1800 - max(track_save$time, na.rm = TRUE), 2))
   
    
   # attache the island_counts column, with all 24 combinations
-  if (nrow(island_counts) > 0) {
-    master_row <- bind_cols(master_row, island_counts %>% select(-any_of("unique_trial_ID")))
-  }
+  master_row <- bind_cols(master_row, island_counts)
   
-  # save to Master CSV
   write.table(master_row, file = master_file, append = TRUE, sep = ",", 
               col.names = !file.exists(master_file), row.names = FALSE)
   
@@ -258,7 +249,6 @@ all_ls <- lapply(foraging_append, function(x){
 # ->  No data after cleaning
 # Processing: summer_20210803-1_T1S1
 # ->  No data after cleaning
-
 
 #Write result csv
 result <- read.csv(here("csv/processed/foraging_results.csv"))
@@ -341,14 +331,14 @@ plot <- ggplot() +
 animate(plot, fps = 50)
 
 
-#Various checks
+#Various checks ----
 str(island_visit)
 island_visit_ls <- split(island_visit, island_visit$unique_trial_ID)
-df_island <- island_visit_ls$`summer_20210803-3_T2S1`
+df_island <- island_visit_ls$`spring_20201103-4_T1S2`
 df_2 <- island_visit_ls[[12]]
 str(df_island)
 str(df)
-island_visit <- read.csv(here("csv/island_visit_FR.csv"))
+island_visit <- read.csv(here("csv/island_visit.csv"))
 island_separate <- island_visit %>%
   separate(unique_trial_ID, into = c("season", "ID", "session"), sep = "_")
 
@@ -364,7 +354,7 @@ sessions_count <- island_visit %>%
   count(season, id, name = "n_sessions")   
 
 ##check if the csv is merged with the tracking
-check <- view(result_final[["any unique trial ID"]])
+check <- view(result[["any unique trial ID"]])
 
 #check for the mismatches among my observations and the pvs
 mismatch_rows <- lapply(result_ls, function(df) {

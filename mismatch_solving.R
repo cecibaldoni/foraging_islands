@@ -120,3 +120,25 @@ ggplot() +
   scale_color_manual(values = c("0" = "red", "1" = "green")) +
   labs(title = "Animal visits and Island Hex Buffers",
        x = "X", y = "Y")
+
+
+
+# ------------------------
+
+
+x_test <- foraging_append[["summer_20210803-4_T1S1"]]
+trial_id <- unique(x_test$unique_trial_ID)
+
+#  make sure the "islands" locations match the "tracking" scale
+trial_coords <- coords %>% filter(unique_trial_ID == trial_id)
+
+# door coordinates 
+door_coords <- trial_coords %>% select(door_x, door_y)
+x_cleaned <- clean_trajectory(x_test, door_coords$door_x, door_coords$door_y)
+
+# filter for frames where manual observation says 'Island' but 'island' column is NA
+mismatches <- x_cleaned %>%
+  filter(!is.na(island_debug) & is.na(island)) %>%
+  select(frame, x, y, island_debug)
+
+print(paste("Found", nrow(mismatches), "mismatch frames in trial", trial_id))
