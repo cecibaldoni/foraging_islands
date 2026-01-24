@@ -89,10 +89,37 @@ foraging_extr <- foraging_extr %>%
 foraging_extr <- foraging_extr %>% 
   mutate(moving_time = round(last_frame * 30, 2))
 
+#sequence of island visited
+island_seq_df <- result %>%
+  filter(!is.na(island_debug)) %>% 
+  group_by(unique_trial_ID) %>%
+  summarise(island_sequence = paste(island_debug, collapse = "-"),.groups = "drop")
+
+foraging_extr <- foraging_extr %>%
+  left_join(island_seq_df, by = "unique_trial_ID")
+
+#n island visited
+foraging_extr <- foraging_extr %>%
+  mutate(n_islands = lengths(strsplit(island_sequence.y, "-")))
+
+#compare strictly the sequence
+library(stringdist)
+
+dist_df <- foraging_extr %>%
+  group_by(ID) %>%
+  summarise(T1_distance = stringdist(
+      island_sequence.y[trial == "T1S1"],
+      island_sequence.y[trial == "T1S2"],
+      method = "lv"),
+    T2_distance = stringdist(
+      island_sequence.y[trial == "T2S1"],
+      island_sequence.y[trial == "T2S2"],
+      method = "lv"),.groups = "drop")
+
 #Ordering the columns
 foraging_extr <- foraging_extr %>%
   select(unique_trial_ID, season, ID, trial, first_AD_time, first_AD_island, first_AD_door, A_0, A_1, B_0, C_0, D_0, D_1,
-         travelling_time, islands_time, nonmoving_time, moving_time, last_frame)
+         travelling_time, islands_time, nonmoving_time, moving_time, last_frame, island_sequence.y)
 
 # ----- Island and door interactions (new df) -----
 position_counts <- result %>%
@@ -173,6 +200,15 @@ missing_trials_df <- position_counts %>%
   mutate(missing_trials = lapply(found_trials, function(x) setdiff(expected_trials, x))) %>%
   select(unique_ID, missing_trials) %>%
   unnest(missing_trials) 
+
+#Join the success rate to position count
+
+doors_summary_df <- bind_rows(trial_ls_processed)
+doors_summary_df <- doors_summary_df %>%
+  select(unique_trial_ID, door_count, door_norm)
+position_counts <- position_counts %>%
+  left_join(doors_summary_df, by = "unique_trial_ID")
+
 
 #Save csv
 write.csv( position_counts, here("csv/processed", "position_counts.csv"),row.names = FALSE)
@@ -325,3 +361,33 @@ ggplot(foraging_extr, aes(x = distance_total_cm)) +
                  color = "black") +
   geom_density(color = "red", linewidth = 1) +
   theme_minimal()
+
+#Plot for the heatmap
+ind_df <- result_ls[[5]]
+ggplot(ind_df, aes(x = x, y = y)) +
+  stat_density_2d (aes(fill = after_stat(density)),
+    geom = "raster",
+    contour = FALSE) +
+  scale_fill_viridis_c(option = "inferno") +
+  coord_equal() +
+  theme_minimal() +
+  labs(title = "Heatmap – Individual 5",
+    x = "X position",
+    y = "Y position",
+    fill = "Density")
+#Plot heatmap for the entire seasons
+season_to_plot <- 'winter'
+season_ls <- keep(result_ls, ~ unique(.x$season) == season_to_plot)
+season_df <- bind_rows(season_ls)
+ggplot(season_df, aes(x = x, y = y)) +
+  stat_density_2d(aes(fill = after_stat(density)),
+    geom = "raster",
+    contour = FALSE) +
+  scale_fill_viridis_c(option = "inferno") +
+  coord_equal() +
+  theme_minimal() +
+  labs(title = paste("Heatmap –", season_to_plot),
+    x = "X position",
+    y = "Y position",
+    fill = "Density")
+
