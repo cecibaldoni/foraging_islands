@@ -100,7 +100,7 @@ foraging_extr <- foraging_extr %>%
 
 #n island visited
 foraging_extr <- foraging_extr %>%
-  mutate(n_islands = lengths(strsplit(island_sequence.y, "-")))
+  mutate(n_islands = lengths(strsplit(island_sequence, "-")))
 
 #compare strictly the sequence
 library(stringdist)
