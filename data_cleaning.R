@@ -71,6 +71,7 @@ island_frame <- result %>%
   group_by(unique_trial_ID) %>%
   summarise(last_frame = max(frame, na.rm = TRUE),.groups = "drop")
 
+
 foraging_extr <- foraging_extr %>%
   left_join(island_frame, by = "unique_trial_ID") 
 
@@ -176,6 +177,7 @@ trial_ls_processed <- map(trial_ls, function(df) {
 #~ .x & !lag(.x) This means: count it if it is used now and if it was NOT used in the previous session 
   df <- df %>%
     arrange(trial) %>%
+    mutate(across(all_of(ad_cols), ~replace_na(.x, 0))) %>% 
     mutate(across(all_of(ad_cols), ~ .x != 0)) %>%
     mutate(across(all_of(ad_cols), ~ case_when(
           trial %in% c("T1S1", "T2S1") ~ .x,
@@ -187,9 +189,15 @@ trial_ls_processed <- map(trial_ls, function(df) {
    
   df <- df  %>%
     arrange(trial) %>%
-    mutate(door_norm = case_when(trial %in% c("T1S1", "T2S1") ~ door_count / 12,
-        trial %in% c("T1S2", "T2S2") ~
-          door_count / (12 - lag(door_count))))
+    mutate(
+      door_norm = case_when(
+        trial %in% c("T1S1", "T2S1") ~ door_count / 12,
+        trial %in% c("T1S2", "T2S2") &
+          (12 - lag(door_count)) > 0 ~
+          door_count / (12 - lag(door_count)),
+        TRUE ~ NA_real_
+      )
+    )
 })
 
 
@@ -207,7 +215,9 @@ doors_summary_df <- bind_rows(trial_ls_processed)
 doors_summary_df <- doors_summary_df %>%
   select(unique_trial_ID, door_count, door_norm)
 position_counts <- position_counts %>%
-  left_join(doors_summary_df, by = "unique_trial_ID")
+  select(-any_of(c("door_count", "door_norm"))) %>%
+  left_join(doors_summary_df, by = "unique_trial_ID") %>% 
+  mutate (door_count = replace_na(door_count, 0), door_norm = replace_na(door_norm, 0))
 
 
 #Save csv
@@ -391,3 +401,11 @@ ggplot(season_df, aes(x = x, y = y)) +
     y = "Y position",
     fill = "Density")
 
+#Plot success rate per trial
+ggplot(position_counts, aes(x =trial, y = door_norm)) +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.7, color = "darkblue") +
+  geom_smooth(aes(group = 1), method = "loess", se = FALSE, color = "black", linewidth = 1) +
+  facet_wrap (~ season)+
+  labs(x = "Season and Trial", y = "Success rate") +
+  theme_minimal(base_size = 14) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
