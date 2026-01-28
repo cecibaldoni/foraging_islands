@@ -7,122 +7,8 @@ library(purrr)
 result <- read.csv(here("csv/processed/foraging_results.csv"))
 master <- read.csv(here('csv/processed/foraging_master.csv'))
 
-foraging_extr <- result %>%
-  distinct(unique_trial_ID) %>%
-  filter(unique_trial_ID != "unique_trial_ID") %>%
-  separate(unique_trial_ID, into = c("season", "ID", "trial"),sep = "_", remove = FALSE)
-
-# ----- First frame and time to baited island interaction and join-----
-first_success <- result %>%
-  filter(island_debug %in% c("A", "D")) %>%
-  filter(unique_trial_ID != "unique_trial_ID") %>% 
-  mutate(frame = as.numeric(frame)) %>%
-  group_by(unique_trial_ID) %>%
-  slice_min(frame, n = 1, with_ties = FALSE) %>%
-  ungroup() %>%
-  transmute(unique_trial_ID, first_AD_frame = frame, first_AD_island = island_debug, first_AD_door = place)
-
-foraging_extr <- foraging_extr %>%
-  left_join(first_success, by = "unique_trial_ID") %>%
-  mutate(first_AD_time = round(first_AD_frame / 30, 2))
-
-first_success <- result %>%
-  filter(island_debug %in% c("A", 'B', 'C', "D")) %>%
-  filter(unique_trial_ID != "unique_trial_ID") %>% 
-  mutate(frame = as.numeric(frame)) %>%
-  group_by(unique_trial_ID) %>%
-  slice_min(frame, n = 1, with_ties = FALSE) %>%
-  ungroup() %>%
-  transmute(unique_trial_ID, first_island_frame = frame, first_island = island_debug, first_door = place)
-
-foraging_extr <- foraging_extr %>%
-  left_join(first_success, by = "unique_trial_ID") %>%
-  mutate(first_island_time = round(first_island_frame / 30, 2))
-
-#Islands visited
-letter_food_counts <- result %>%
-  filter(unique_trial_ID != "unique_trial_ID") %>%
-  filter(!is.na(island_debug), !is.na(food)) %>%
-  filter(food %in% c(0, 1)) %>%
-  group_by(unique_trial_ID, island_debug, food) %>%
-  summarise(count = n(), .groups = "drop") %>%
-  unite(letter_food, island_debug, food, sep = "_") %>%
-  pivot_wider(names_from = letter_food, values_from = count, values_fill = 0)
-
-foraging_extr <- foraging_extr %>%
-  left_join(letter_food_counts, by = "unique_trial_ID")
-
-#Time management
-#Travel time
-travelling_counts <- result %>%
-  filter(unique_trial_ID != "unique_trial_ID") %>% 
-  group_by(unique_trial_ID) %>%
-  summarise(travelling_frames = sum(journey == "travelling"), .groups = "drop")
-
-foraging_extr <- foraging_extr %>%
-  left_join(travelling_counts, by = "unique_trial_ID") %>%
-  mutate(travelling_time = round(travelling_frames / 30, 2))
-#Island time
-result <- result %>%
-  mutate(frame = as.numeric(frame))
-
-island_frame <- result %>%
-  filter(unique_trial_ID != "unique_trial_ID") %>%  
-  group_by(unique_trial_ID) %>%
-  summarise(last_frame = max(frame, na.rm = TRUE),.groups = "drop")
-
-
-foraging_extr <- foraging_extr %>%
-  left_join(island_frame, by = "unique_trial_ID") 
-
-foraging_extr <- foraging_extr %>%  
-  mutate(island_frame = last_frame - travelling_frames)
-
-foraging_extr <- foraging_extr %>%
-  mutate(islands_time = round(island_frame * (1/30), 2))
-#Time not moving
-foraging_extr <- foraging_extr %>% 
-  mutate(nonmoving_frames = (54000 - last_frame))
-
-foraging_extr <- foraging_extr %>% 
-  mutate (nonmoving_time = pmax(round(nonmoving_frames * (1/30), 2), 0))
-#Time moving
-foraging_extr <- foraging_extr %>% 
-  mutate(moving_time = round(last_frame * 30, 2))
-
-#sequence of island visited
-island_seq_df <- result %>%
-  filter(!is.na(island_debug)) %>% 
-  group_by(unique_trial_ID) %>%
-  summarise(island_sequence = paste(island_debug, collapse = "-"),.groups = "drop")
-
-foraging_extr <- foraging_extr %>%
-  left_join(island_seq_df, by = "unique_trial_ID")
-
-#n island visited
-foraging_extr <- foraging_extr %>%
-  mutate(n_islands = lengths(strsplit(island_sequence, "-")))
-
-#compare strictly the sequence
-library(stringdist)
-
-dist_df <- foraging_extr %>%
-  group_by(ID) %>%
-  summarise(T1_distance = stringdist(
-      island_sequence.y[trial == "T1S1"],
-      island_sequence.y[trial == "T1S2"],
-      method = "lv"),
-    T2_distance = stringdist(
-      island_sequence.y[trial == "T2S1"],
-      island_sequence.y[trial == "T2S2"],
-      method = "lv"),.groups = "drop")
-
-#Ordering the columns
-foraging_extr <- foraging_extr %>%
-  select(unique_trial_ID, season, ID, trial, first_AD_time, first_AD_island, first_AD_door, A_0, A_1, B_0, C_0, D_0, D_1,
-         travelling_time, islands_time, nonmoving_time, moving_time, last_frame, island_sequence.y)
-
 # ----- Island and door interactions (new df) -----
+# This dataframe will produce a table with IDs, number of interaction for each island door, and success rate.
 position_counts <- result %>%
   distinct(unique_trial_ID) %>%
   filter(unique_trial_ID != "unique_trial_ID") %>%
@@ -189,17 +75,12 @@ trial_ls_processed <- map(trial_ls, function(df) {
    
   df <- df  %>%
     arrange(trial) %>%
-    mutate(
-      door_norm = case_when(
+    mutate(door_norm = case_when(
         trial %in% c("T1S1", "T2S1") ~ door_count / 12,
         trial %in% c("T1S2", "T2S2") &
           (12 - lag(door_count)) > 0 ~
-          door_count / (12 - lag(door_count)),
-        TRUE ~ NA_real_
-      )
-    )
+          door_count / (12 - lag(door_count)),TRUE ~ NA_real_))
 })
-
 
 #Missing trial list
 missing_trials_df <- position_counts %>%
@@ -219,11 +100,107 @@ position_counts <- position_counts %>%
   left_join(doors_summary_df, by = "unique_trial_ID") %>% 
   mutate (door_count = replace_na(door_count, 0), door_norm = replace_na(door_norm, 0))
 
-
 #Save csv
 write.csv( position_counts, here("csv/processed", "position_counts.csv"),row.names = FALSE)
 
-# ----- Loop trial for trajr -----
+#Plot success rate per trial
+ggplot(position_counts, aes(x =trial, y = door_norm)) +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.7, color = "darkblue") +
+  geom_smooth(aes(group = 1), method = "loess", se = FALSE, color = "black", linewidth = 1) +
+  facet_wrap (~ season)+
+  labs(x = "Season and Trial", y = "Success rate") +
+  theme_minimal(base_size = 14) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+foraging_extr <- result %>%
+  distinct(unique_trial_ID) %>%
+  filter(unique_trial_ID != "unique_trial_ID") %>%
+  separate(unique_trial_ID, into = c("season", "ID", "trial"),sep = "_", remove = FALSE)
+  
+# ----- First frame and time to baited island interaction and join -----
+first_success <- result %>%
+  filter(island_debug %in% c("A", "D")) %>%
+  filter(unique_trial_ID != "unique_trial_ID") %>% 
+  mutate(frame = as.numeric(frame)) %>%
+  group_by(unique_trial_ID) %>%
+  slice_min(frame, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  transmute(unique_trial_ID, first_AD_frame = frame, first_AD_island = island_debug, first_AD_door = place)
+
+foraging_extr <- foraging_extr %>%
+  left_join(first_success, by = "unique_trial_ID") %>%
+  mutate(first_AD_time = round(first_AD_frame / 30, 2))
+
+# --- First frame and time of island interaction and join ---
+first_success <- result %>%
+  filter(island_debug %in% c("A", 'B', 'C', "D")) %>%
+  filter(unique_trial_ID != "unique_trial_ID") %>% 
+  mutate(frame = as.numeric(frame)) %>%
+  group_by(unique_trial_ID) %>%
+  slice_min(frame, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  transmute(unique_trial_ID, first_island_frame = frame, first_island = island_debug, first_door = place)
+
+foraging_extr <- foraging_extr %>%
+  left_join(first_success, by = "unique_trial_ID") %>%
+  mutate(first_island_time = round(first_island_frame / 30, 2))
+
+# ---- Number of visits per island ----
+letter_food_counts <- result %>%
+  filter(unique_trial_ID != "unique_trial_ID") %>%
+  filter(!is.na(island_debug)) %>%
+  group_by(unique_trial_ID, island_debug) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  unite(letter_food, island_debug, sep = "_") %>%
+  pivot_wider(names_from = letter_food, values_from = count, values_fill = 0)
+
+foraging_extr <- foraging_extr %>%
+  left_join(letter_food_counts, by = "unique_trial_ID")
+
+# ----- Time management -----
+#Travel time
+travelling_counts <- result %>%
+  filter(unique_trial_ID != "unique_trial_ID") %>% 
+  group_by(unique_trial_ID) %>%
+  summarise(travelling_frames = sum(journey == "travelling"), .groups = "drop")
+
+foraging_extr <- foraging_extr %>%
+  left_join(travelling_counts, by = "unique_trial_ID") %>%
+  mutate(travelling_time = round(travelling_frames / 30, 2))
+#Island time
+result <- result %>%
+  mutate(frame = as.numeric(frame))
+
+island_frame <- result %>%
+  filter(unique_trial_ID != "unique_trial_ID") %>%  
+  group_by(unique_trial_ID) %>%
+  summarise(last_frame = max(frame, na.rm = TRUE),.groups = "drop")
+
+foraging_extr <- foraging_extr %>%
+  left_join(island_frame, by = "unique_trial_ID") 
+
+foraging_extr <- foraging_extr %>%  
+  mutate(island_frame = last_frame - travelling_frames)
+
+foraging_extr <- foraging_extr %>%
+  mutate(islands_time = round(island_frame * (1/30), 2))
+#Time not moving
+foraging_extr <- foraging_extr %>% 
+  mutate(nonmoving_frames = (54000 - last_frame))
+
+foraging_extr <- foraging_extr %>% 
+  mutate (nonmoving_time = pmax(round(nonmoving_frames * (1/30), 2), 0))
+#Time moving
+foraging_extr <- foraging_extr %>% 
+  mutate(moving_time = round(last_frame * 30, 2))
+
+#Ordering the columns
+foraging_extr <- foraging_extr %>%
+  select(unique_trial_ID, season, ID, trial, first_AD_time, first_AD_island, first_AD_door, first_island, A, B, C, D,
+         travelling_time, islands_time, nonmoving_time, moving_time, last_frame)
+
+# ----- Loop for trajr -----
 df_trajectory <- result %>%
   select(unique_trial_ID, season, ID, trial, time, x, y, journey) %>%
   mutate(time = as.numeric(time)) %>%
@@ -297,6 +274,20 @@ foraging_extr <- foraging_extr %>%
 write.csv( foraging_extr, here("csv/processed", "foraging_extr.csv"),row.names = FALSE)
 
 # ----- Plots -------
+#Plot of the moving time
+ggplot(foraging_extr, aes(x = trial, y = moving_time, color = season))+
+  geom_boxplot(width = 0.15, position = position_dodge(width = 0.8), outlier.shape = NA, alpha = 0.7) +
+  geom_jitter(position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.8), size = 1, alpha = 0.4) +
+  facet_wrap (~ season)+
+  theme_classic()
+                                                                                                                                                                                   
+#Plot for the distance covered
+ggplot(foraging_extr, aes(x = trial, y = distance_total_cm)) +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.7, color = "darkblue") +
+  facet_wrap (~ season) +
+  theme_minimal(base_size = 14) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 #Plot the island door interactions  
 all_letters_long <- position_counts %>%
   pivot_longer(cols = matches("^[A-D]_[0-6]$"),
@@ -308,12 +299,20 @@ ggplot(all_letters_long, aes(x = letter_position, y = count, fill = season)) +
   theme_classic() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-#Plot of the moving time
-ggplot(foraging_extr, aes(x = trial, y = moving_time, color = season))+
+#Plot the first island and which door is opened
+ggplot(foraging_extr %>% filter(!is.na(first_AD_island)),
+  aes(x = first_island, y = first_AD_time, fill = factor(first_AD_door))) +
+  # half violin
+  #geom_violin(position = position_dodge(width = 0.8), alpha = 0.5, trim = FALSE) +
+  # boxplot
   geom_boxplot(width = 0.15, position = position_dodge(width = 0.8), outlier.shape = NA, alpha = 0.7) +
+  # jittered points ("rain")
   geom_jitter(position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.8), size = 1, alpha = 0.4) +
+  labs(x = "First A/D Island", y = "Time to First A/D (s)", fill = "Door") +
   facet_wrap (~ season)+
   theme_classic()
+
+
 
 #Plot the time to reach the first successful island per season
 counts <- foraging_extr %>%
@@ -329,48 +328,14 @@ ggplot(foraging_extr, aes(x = season_trial, y = first_AD_time)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 #Plot the time to reach the first successful island per trial per season
-foraging_extr <- master %>%
-  mutate(trial = factor(trial, levels = c("T1S1", "T1S2", "T2S1", "T2S2")),
-    season_trial = factor(paste(season, trial, sep = "_"),
-    levels = c("spring_T1S1", "spring_T1S2", "spring_T2S1", "spring_T2S2",
-               "summer_T1S1", "summer_T1S2", "summer_T2S1", "summer_T2S2",
-               "winter_T1S1", "winter_T1S2", "winter_T2S1", "winter_T2S2")))
-ggplot(foraging_extr, aes(x = season_trial, y = first_AD_time)) +
+ggplot(foraging_extr, aes(x = trial, y = first_AD_time)) +
   geom_boxplot(fill = "skyblue", color = "black") +
   geom_jitter(width = 0.15, size = 2, alpha = 0.7, color = "darkblue") +
+  facet_wrap (~ season)+
   labs(x = "Season and Trial", y = "Time to first baited island (seconds)", title = "First AD Time per Season and Trial") +
   theme_minimal(base_size = 14) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-
-#Plot the first island A/D and which door is opened
-ggplot(foraging_extr %>% filter(!is.na(first_AD_island)),
-  aes(x = first_AD_island, y = first_AD_time, fill = factor(first_AD_door))) +
-  # half violin
-  #geom_violin(position = position_dodge(width = 0.8), alpha = 0.5, trim = FALSE) +
-  # boxplot
-  geom_boxplot(width = 0.15, position = position_dodge(width = 0.8), outlier.shape = NA, alpha = 0.7) +
-  # jittered points ("rain")
-  geom_jitter(position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.8), size = 1, alpha = 0.4) +
-  labs(x = "First A/D Island", y = "Time to First A/D (s)", fill = "Door") +
-  facet_wrap (~ season)+
-  theme_classic()
-
-#Plot for the distance covered
-ggplot(foraging_extr, aes(x = season_trial, y = distance_total_cm)) +
-  geom_boxplot(fill = "skyblue", color = "black") +
-  geom_jitter(width = 0.15, size = 2, alpha = 0.7, color = "darkblue") +
-  theme_minimal(base_size = 14) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-#Plot the normal distribution of the distance covered
-ggplot(foraging_extr, aes(x = distance_total_cm)) +
-  geom_histogram(aes(y = after_stat(density)),
-                 bins = 30,
-                 fill = "lightblue",
-                 color = "black") +
-  geom_density(color = "red", linewidth = 1) +
-  theme_minimal()
 
 #Plot for the heatmap
 ind_df <- result_ls[[5]]
@@ -401,11 +366,4 @@ ggplot(season_df, aes(x = x, y = y)) +
     y = "Y position",
     fill = "Density")
 
-#Plot success rate per trial
-ggplot(position_counts, aes(x =trial, y = door_norm)) +
-  geom_jitter(width = 0.15, size = 2, alpha = 0.7, color = "darkblue") +
-  geom_smooth(aes(group = 1), method = "loess", se = FALSE, color = "black", linewidth = 1) +
-  facet_wrap (~ season)+
-  labs(x = "Season and Trial", y = "Success rate") +
-  theme_minimal(base_size = 14) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
