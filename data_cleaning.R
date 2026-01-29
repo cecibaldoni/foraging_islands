@@ -112,7 +112,7 @@ ggplot(position_counts, aes(x =trial, y = door_norm)) +
   theme_minimal(base_size = 14) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-
+# ----- Master df -----
 foraging_extr <- result %>%
   distinct(unique_trial_ID) %>%
   filter(unique_trial_ID != "unique_trial_ID") %>%
@@ -197,8 +197,8 @@ foraging_extr <- foraging_extr %>%
 
 #Ordering the columns
 foraging_extr <- foraging_extr %>%
-  select(unique_trial_ID, season, ID, trial, first_AD_time, first_AD_island, first_AD_door, first_island, A, B, C, D,
-         travelling_time, islands_time, nonmoving_time, moving_time, last_frame)
+  select(unique_trial_ID, season, ID, trial, first_AD_time, first_AD_island, first_AD_door, first_island, first_door, first_island_time,
+         A, B, C, D, travelling_time, islands_time, nonmoving_time, moving_time, last_frame)
 
 # ----- Loop for trajr -----
 df_trajectory <- result %>%
@@ -276,94 +276,62 @@ write.csv( foraging_extr, here("csv/processed", "foraging_extr.csv"),row.names =
 # ----- Plots -------
 #Plot of the moving time
 ggplot(foraging_extr, aes(x = trial, y = moving_time, color = season))+
-  geom_boxplot(width = 0.15, position = position_dodge(width = 0.8), outlier.shape = NA, alpha = 0.7) +
+  geom_violin(width = 0.15, position = position_dodge(width = 0.8), outlier.shape = NA, alpha = 0.7) +
   geom_jitter(position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.8), size = 1, alpha = 0.4) +
   facet_wrap (~ season)+
   theme_classic()
                                                                                                                                                                                    
 #Plot for the distance covered
 ggplot(foraging_extr, aes(x = trial, y = distance_total_cm)) +
-  geom_boxplot(fill = "skyblue", color = "black") +
+  geom_violin(fill = "skyblue", color = "black") +
+  #geom_boxplot(fill = "skyblue", color = "black") +
   geom_jitter(width = 0.15, size = 2, alpha = 0.7, color = "darkblue") +
   facet_wrap (~ season) +
   theme_minimal(base_size = 14) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-#Plot the island door interactions  
-all_letters_long <- position_counts %>%
-  pivot_longer(cols = matches("^[A-D]_[0-6]$"),
-    names_to = "letter_position",
+
+#Plot the island interactions count
+#Here we can switch trial and season 
+all_letters_long <- foraging_extr %>%
+  pivot_longer(cols = c(A, B, C, D),
+    names_to = "letter",
     values_to = "count")
-ggplot(all_letters_long, aes(x = letter_position, y = count, fill = season)) +
+ggplot(all_letters_long, aes(x = letter, y = count, fill = season)) +
   geom_col(position = "dodge") +
+  facet_wrap (~ trial) +
   labs(x = "Island door interaction", y = "Count", fill = "Season") +
-  theme_classic() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  theme_classic() 
 
-#Plot the first island and which door is opened
-ggplot(foraging_extr %>% filter(!is.na(first_AD_island)),
-  aes(x = first_island, y = first_AD_time, fill = factor(first_AD_door))) +
-  # half violin
-  #geom_violin(position = position_dodge(width = 0.8), alpha = 0.5, trim = FALSE) +
-  # boxplot
-  geom_boxplot(width = 0.15, position = position_dodge(width = 0.8), outlier.shape = NA, alpha = 0.7) +
-  # jittered points ("rain")
-  geom_jitter(position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.8), size = 1, alpha = 0.4) +
-  labs(x = "First A/D Island", y = "Time to First A/D (s)", fill = "Door") +
-  facet_wrap (~ season)+
-  theme_classic()
+#Plot the time to the first island
+foraging_extr_clean <- foraging_extr %>%
+  filter(!is.na(first_island), !is.na(first_island_time), !is.na(season))
+ggplot(foraging_extr_clean, aes(x = first_island, y = first_island_time, color = season)) +
+  geom_violin(fill = "skyblue", color = "black", alpha = 0.3, trim = FALSE) +
+  #geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.7) +
+  labs(x = "Door", y = "Time to first island (s)") +
+  facet_wrap (~ trial) +
+  theme_minimal(base_size = 14)
 
-
-
-#Plot the time to reach the first successful island per season
-counts <- foraging_extr %>%
-  group_by(season) %>%
-  summarise(n = sum(!is.na(first_AD_time))) 
-
-ggplot(foraging_extr, aes(x = season_trial, y = first_AD_time)) +
-  #geom_violin(fill = "skyblue", color = "black", alpha = 0.3, trim = FALSE) +
-  geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
-  geom_jitter(width = 0.15, size = 2, alpha = 0.7, color = "blue") +
-  labs(x = "Season", y = "Time to first baited island (seconds)", title = "Raincloud plot of First AD Time by Season") +
-  theme_minimal(base_size = 14)+
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-#Plot the time to reach the first successful island per trial per season
-ggplot(foraging_extr, aes(x = trial, y = first_AD_time)) +
-  geom_boxplot(fill = "skyblue", color = "black") +
-  geom_jitter(width = 0.15, size = 2, alpha = 0.7, color = "darkblue") +
-  facet_wrap (~ season)+
-  labs(x = "Season and Trial", y = "Time to first baited island (seconds)", title = "First AD Time per Season and Trial") +
+#Plot the straightness
+foraging_extr_filt <- foraging_extr %>%
+  filter(straightness_total <= 0.05)
+ggplot(foraging_extr_filt, aes(x = season, y = straightness_total, color = season)) +
+  geom_violin(fill = "skyblue", color = "black") +
+  #geom_boxplot(fill = "skyblue", color = "black") +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.7) +
+  facet_wrap (~ trial) +
   theme_minimal(base_size = 14) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-
-#Plot for the heatmap
-ind_df <- result_ls[[5]]
-ggplot(ind_df, aes(x = x, y = y)) +
-  stat_density_2d (aes(fill = after_stat(density)),
-    geom = "raster",
-    contour = FALSE) +
-  scale_fill_viridis_c(option = "inferno") +
-  coord_equal() +
-  theme_minimal() +
-  labs(title = "Heatmap – Individual 5",
-    x = "X position",
-    y = "Y position",
-    fill = "Density")
-#Plot heatmap for the entire seasons
-season_to_plot <- 'winter'
-season_ls <- keep(result_ls, ~ unique(.x$season) == season_to_plot)
-season_df <- bind_rows(season_ls)
-ggplot(season_df, aes(x = x, y = y)) +
-  stat_density_2d(aes(fill = after_stat(density)),
-    geom = "raster",
-    contour = FALSE) +
-  scale_fill_viridis_c(option = "inferno") +
-  coord_equal() +
-  theme_minimal() +
-  labs(title = paste("Heatmap –", season_to_plot),
-    x = "X position",
-    y = "Y position",
-    fill = "Density")
-
-
+#Plot the time to reach the first successful island per trial per season
+foraging_extr_filtr <- foraging_extr %>%
+  filter(first_AD_time <= 200)
+ggplot(foraging_extr_filtr, aes(x = season, y = first_AD_time, color = season)) +
+  geom_violin(fill = "skyblue", color = "black") +
+  #geom_boxplot(fill = "skyblue", color = "black") +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.7) +
+  facet_wrap (~ trial)+
+  labs(x = "Season and Trial", y = "Time to first baited island (seconds)", title = "First AD Time per Season and Trial") +
+  theme_minimal(base_size = 14) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
