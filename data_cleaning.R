@@ -106,11 +106,20 @@ write.csv( position_counts, here("csv/processed", "position_counts.csv"),row.nam
 #Plot success rate per trial
 ggplot(position_counts, aes(x =trial, y = door_norm)) +
   geom_jitter(width = 0.15, size = 2, alpha = 0.7, color = "darkblue") +
-  geom_smooth(aes(group = 1), method = "loess", se = FALSE, color = "black", linewidth = 1) +
+  #geom_smooth(aes(group = 1), method = "loess", se = FALSE, color = "black", linewidth = 1) +
   facet_wrap (~ season)+
   labs(x = "Season and Trial", y = "Success rate") +
-  theme_minimal(base_size = 14) +
+  theme_bw(base_size = 14) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+a <- ggplot(position_counts, aes(x = door_norm)) +
+  geom_density(fill = "blue", alpha = 0.4)
+b <- ggplot(position_counts, aes(x = door_norm)) +
+  geom_density(fill = "blue", alpha = 0.4) +
+  facet_wrap(~season)
+a
+b
+max(position_counts$door_norm)
 
 # ----- Master df -----
 foraging_extr <- result %>%
