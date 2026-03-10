@@ -311,7 +311,7 @@ lapply(head(result_ls), function(i) {
 #Animated plot
 library(gganimate)
 
-df <- result_final[[which(sapply(result_final, function(df) df$unique_trial_ID[1] == "summer_20210803-4_T1S2"))]]
+df <- result[[which(sapply(result, function(df) df$unique_trial_ID[1] == "summer_20210803-4_T1S2"))]]
 
 islands <- coords %>%
   filter(unique_trial_ID == df$unique_trial_ID[1]) %>%
