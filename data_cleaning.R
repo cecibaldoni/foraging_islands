@@ -3,9 +3,10 @@ library(here)
 library(ggdist)
 library(trajr)
 library(purrr)
+library(SimilarityMeasures)
 
 result <- read.csv(here("csv/processed/foraging_results.csv"))
-master <- read.csv(here('csv/processed/foraging_master.csv'))
+master <- read.csv(here('csv/processed/foraging_extr.csv'))
 
 # ----- Island and door interactions (new df) -----
 # This dataframe will produce a table with IDs, number of interaction for each island door, and success rate.
@@ -345,3 +346,24 @@ ggplot(foraging_extr_filtr, aes(x = season, y = first_AD_time, color = season)) 
   theme_minimal(base_size = 14) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+# Paths comparisons trials
+
+result_small <- result %>%
+  mutate(season_id = paste(season, ID, sep = "_")) %>% 
+  group_by(season_id, trial) %>%
+  slice(round(seq(1, n(), length.out = 200)))
+
+trajectories <- result_small %>%
+  mutate(season_id = paste(season, ID, sep = "_")) %>% 
+  arrange(season_id, trial, frame) %>%
+  group_by(season_id) %>%
+  filter(n_distinct(trial) == 4) %>%
+  group_by(season_id, trial) %>% 
+  summarise(path = list(as.matrix(cbind(x, y))), .groups="drop")
+
+similarities <- trajectories %>%
+  group_by(season_id) %>%
+  summarise(
+    sim12 = 1/(1 + Frechet(path[[1]], path[[2]])),
+    sim23 = 1/(1 + Frechet(path[[2]], path[[3]])),
+    sim34 = 1/(1 + Frechet(path[[3]], path[[4]])))
