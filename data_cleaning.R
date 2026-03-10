@@ -344,3 +344,4 @@ ggplot(foraging_extr_filtr, aes(x = season, y = first_AD_time, color = season)) 
   labs(x = "Season and Trial", y = "Time to first baited island (seconds)", title = "First AD Time per Season and Trial") +
   theme_minimal(base_size = 14) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
