@@ -11,3 +11,5 @@ npz/
 results/
 Rplot.pdf
 *.html
+
+old/
