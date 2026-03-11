@@ -107,7 +107,6 @@ all_possible_islands <- expand.grid(food = food_ref, island = islands_ref) %>%
 
 #define paths
 results_file <- here("csv/processed", "foraging_results.csv")
-master_file <- here("csv/processed", "foraging_master.csv")
 
 all_ls <- lapply(foraging_append, function(x){
   ## to try the loop with only one list element, run the next line
@@ -197,61 +196,7 @@ all_ls <- lapply(foraging_append, function(x){
   write.table(track_save, file = results_file, 
               append = TRUE, sep = ",", col.names = !file.exists(results_file),
               row.names = FALSE)
-  
-  ## TRAJECTORY/TIME/... CALCULATIONS ----
-  
-  # first time at A or D
-  first_ad <- track_save %>%
-    filter(island %in% c("A", "D")) %>%
-    slice_min(frame, n = 1, with_ties = FALSE)
-  
-  # Island/Food Counts (A_0, A_1, etc.)
-  island_counts <- track_save %>%
-    filter(!is.na(island), !is.na(food)) %>%
-    count(island, food) %>%
-    mutate(col_name = paste0(island, "_", food)) %>%
-    select(col_name, n) %>%
-    tidyr::pivot_wider(names_from = col_name, values_from = n, values_fill = 0)
-  
-  #add all the 24 possible combinations into 24 columns, even if they were not visited
-  missing_cols <- setdiff(all_possible_islands, names(island_counts))
-  if (length(missing_cols) > 0) {
-    island_counts[missing_cols] <- 0
-  }
-  #FIX THE 24 DOORS RESULT
-  
-  #fix the column order, to avoid errors later
-  island_counts <- island_counts %>% select(all_of(all_possible_islands))
-  
-  # trajectory metrics (with the function defined before the loop)
-  traj_all <- safe_traj(track_save)
-  
-  #compile the Master df
-  master_row <- data.frame(
-    #add info columns
-    unique_trial_ID    = x$unique_trial_ID[1],
-    season             = x$season[1],
-    ID                 = x$ID[1],
-    trial              = x$trial[1],
-    #add metrics
-    first_AD_time      = if(nrow(first_ad) > 0) round(first_ad$frame[1] / 30, 2) else NA,
-    distance_total_cm  = if(!is.null(traj_all)) round(TrajLength(traj_all), 2) else NA,
-    straightness_total = if(!is.null(traj_all)) round(TrajStraightness(traj_all), 5) else NA,
-    travelling_time    = round(sum(track_save$journey == "travelling") / 30, 2),
-    moving_time        = round(max(track_save$frame) / 30, 2),
-    nonmoving_time     = round((43200 - max(track_save$frame)) / 30, 2))
-  
-   
-  # attache the island_counts column, with all 24 combinations
-  if (nrow(island_counts) > 0) {
-    master_row <- bind_cols(master_row, island_counts %>% select(-any_of("unique_trial_ID")))
-  }
-  
-  # save to Master CSV
-  write.table(master_row, file = master_file, append = TRUE, sep = ",", 
-              col.names = !file.exists(master_file), row.names = FALSE)
-  
-  return(master_row)
+
 })
 
 #Processing: summer_20210802-3_T2S1
