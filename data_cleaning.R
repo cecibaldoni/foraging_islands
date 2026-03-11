@@ -346,24 +346,61 @@ ggplot(foraging_extr_filtr, aes(x = season, y = first_AD_time, color = season)) 
   theme_minimal(base_size = 14) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-# Paths comparisons trials
+# Similarities in the areas covered
+grid_size <- 40
 
-result_small <- result %>%
+result_grid <- result %>%
+  mutate(
+    x_bin = cut(x, breaks = grid_size, labels = FALSE),
+    y_bin = cut(y, breaks = grid_size, labels = FALSE)
+  )
+
+occupancy <- result_grid %>% 
   mutate(season_id = paste(season, ID, sep = "_")) %>% 
-  group_by(season_id, trial) %>%
-  slice(round(seq(1, n(), length.out = 200)))
+  count(season_id, trial, x_bin, y_bin) 
+  
+maps <- occupancy %>%
+  pivot_wider(
+    names_from = c(x_bin, y_bin),
+    values_from = n,
+    values_fill = 0
+  )
 
-trajectories <- result_small %>%
-  mutate(season_id = paste(season, ID, sep = "_")) %>% 
-  arrange(season_id, trial, frame) %>%
-  group_by(season_id) %>%
-  filter(n_distinct(trial) == 4) %>%
-  group_by(season_id, trial) %>% 
-  summarise(path = list(as.matrix(cbind(x, y))), .groups="drop")
+maps_norm <- maps %>%
+  rowwise() %>%
+  mutate(across(-c(season_id, trial), ~ . / sum(c_across(-c(season_id, trial)))))
 
-similarities <- trajectories %>%
+similarity_fun <- function(a,b){
+  cor(a,b)
+}
+
+
+similarities <- maps_norm %>%
   group_by(season_id) %>%
-  summarise(
-    sim12 = 1/(1 + Frechet(path[[1]], path[[2]])),
-    sim23 = 1/(1 + Frechet(path[[2]], path[[3]])),
-    sim34 = 1/(1 + Frechet(path[[3]], path[[4]])))
+  group_modify(~{
+    
+    trials <- .x$trial
+    mat <- as.matrix(.x[,-c(1,2)])
+    
+    comb <- combn(nrow(mat),2)
+    
+    sims <- apply(comb,2,function(i){
+      similarity_fun(mat[i[1],], mat[i[2],])
+    })
+    
+    tibble(mean_similarity = mean(sims))
+  })
+
+zones <- similarities %>% 
+  separate(season_id, into = c("season", "ID"),sep = "_", remove = FALSE)
+ggplot(zones, aes(x = season, y = mean_similarity, color = season)) +
+  #geom_violin(fill = "skyblue", color = "black") +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.7) 
+
+anova_model <- aov(mean_similarity ~ season, data = zones)
+summary(anova_model)
+plot(anova_model)
+TukeyHSD(anova_model)
+
+
