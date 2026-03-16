@@ -2,15 +2,14 @@
 
 library(tidyverse)
 library(sf)
-# library(mapview)
 library(parallel)
 library(gganimate)
 library(here)
 library(trajr)
+library(gganimate)
 
 # Load and tidy data ----
 tracking <- read.csv(here("csv/merged.csv")) %>%
- # rename(season = ID, ID = trial, trial = season) %>%
   mutate(season = tolower(season))  
   
 cmperpixel = 0.187192
@@ -37,7 +36,7 @@ foraging_ls <- split(tracking, tracking$unique_trial_ID)
 
 island_visit <- read.csv(here("csv/island_visit.csv"))
 
-#foraging append is the tracking with manual observation. To do before the cleaning to avoid frame mismatch.
+#Foraging append is the merge of tracking data with manual observations. To do before the cleaning to avoid frame mismatch.
 foraging_append <- map(foraging_ls, function(df) {
   df %>%
     mutate(frame = as.integer(frame)) %>%
@@ -45,6 +44,7 @@ foraging_append <- map(foraging_ls, function(df) {
 })
 
 # Smooth and clean tracking data ----
+
 clean_trajectory <- function(data, door_x, door_y, max_jump = 20) {
   data <- data %>%
     mutate(dist_from_door = sqrt((x - door_x)^2 + (y - door_y)^2),
@@ -53,8 +53,6 @@ clean_trajectory <- function(data, door_x, door_y, max_jump = 20) {
     select(-dist_from_door, -before_close) %>%
     mutate(frame = row_number(), # re-number frames after filtering
            time = (frame - 1) / 30) #re-number time after filtering 
-  
-          
   
   # detect and fix clusters of jumps
   data <- data %>%
@@ -87,19 +85,10 @@ clean_trajectory <- function(data, door_x, door_y, max_jump = 20) {
   return(data)
 }
 
-#trajectory calculations function
-
-safe_traj <- function(df) {
-  df <- df %>% filter(!is.na(x), !is.na(y), !is.na(time))
-  if (nrow(df) < 2) return(NULL)
-  
-  TrajFromCoords(df, xCol = "x", yCol = "y", fps = 30)
-}
-
 #define all possible combinations of islands and locations (from A to D, from 1 to 6: 24 combinations)
 islands_ref <- c("A", "B", "C", "D")
 food_ref    <- 1:6
-all_possible_islands <- expand.grid(food = food_ref, island = islands_ref) %>%
+all_possible_islands <- expand.grid(food = food_ref, island = islands_ref)%>%
   mutate(col_name = paste0(island, "_", food)) %>%
   pull(col_name)
 
@@ -254,9 +243,6 @@ lapply(head(result_ls), function(i) {
 })
 
 #Animated plot
-library(gganimate)
-
-df <- result[[which(sapply(result, function(df) df$unique_trial_ID[1] == "summer_20210803-4_T1S2"))]]
 
 islands <- coords %>%
   filter(unique_trial_ID == df$unique_trial_ID[1]) %>%
@@ -273,7 +259,7 @@ plot <- ggplot() +
   geom_point(aes(x = islands$B_x, y = islands$B_y), color = "blue", size = 10) +
   geom_point(aes(x = islands$C_x, y = islands$C_y), color = "green", size = 10) +
   geom_point(aes(x = islands$D_x, y = islands$D_y), color = "gold", size = 10) +
-  geom_path(data = df, aes(x = x, y = y, group = 1, color = frame)) +
+  geom_path(data = df, aes(x = x, y = y, group = 1), color = "grey50") +
   geom_point(data = df_food, aes(x = x, y = y, color = factor(food)),
              shape = 4, size = 4) +
   scale_color_manual(values = c("red", "green")) +
@@ -286,7 +272,7 @@ plot <- ggplot() +
 animate(plot, fps = 50)
 
 
-#Various checks
+# Various checks ----
 str(island_visit)
 island_visit_ls <- split(island_visit, island_visit$unique_trial_ID)
 df_island <- island_visit_ls$`summer_20210803-3_T2S1`
