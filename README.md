@@ -33,6 +33,7 @@ Afterwards, each video has been visually analysed to assess the effective visit 
 
 ## Scripts in this repo
 
-1.  `foraging.R` enable to merge the tracking data from Trex and the island visit data manually recorded.
-2.  `trajectory_debug.R` solves some problem on the trajectory of the shrew movement.
-3.  `mismatch_solving.R` solves the mismatches between the tracking observation from Trex and the island visits manually registered.
+1.  `foraging_results.R` enable to clean and tidy the data. Afterwards it merges the tracking data from Trex and the island visit data manually recorded. Finally, some plots to visually assert the result and some checks on the structure of the df.
+2.  `foraging_master.R` enable to calculate the variables that will be used for the modelling. Two csv are produced by this code:
+    -   interactions_count contains the number of interactions with the door of every islands for each shrew. Moreover, a success rate is calculated based on the number of doors visited.
+    -   foraging_master contains all the information that will be implemented in the models for exploration tendencies and path patterns similarities.
