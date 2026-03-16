@@ -305,25 +305,64 @@ similarity_fun <- function(a,b){
 
 similarities <- maps_norm %>%
   group_by(season_id) %>%
+  arrange(trial, .by_group = TRUE) %>%
   group_modify(~{
-     trials <- .x$trial
+    
     mat <- as.matrix(.x[,-c(1,2)])
-    comb <- combn(nrow(mat),2)
-    sims <- apply(comb,2,function(i){
-      similarity_fun(mat[i[1],], mat[i[2],])
+    
+    sims <- sapply(1:(nrow(mat)-1), function(i){
+      similarity_fun(mat[i, ], mat[i+1, ])
     })
+    
     tibble(mean_similarity = mean(sims))
   })
+
+# Summarize occupancy per square per season_id
+heatmap_data <- occupancy %>%
+  mutate(season_id = as.character(season_id), season = sub("_.*$", "", season_id)) %>%
+  group_by(season_id, season, x_bin, y_bin) %>%
+  summarise(count = sum(n), .groups = "drop") %>%
+  mutate(x_bin = as.numeric(x_bin), y_bin = as.numeric(y_bin))
+
+# Split data by season_id
+heatmap_list <- split(heatmap_data, heatmap_data$season_id)
+
+#plot for each season_id
+plots <- lapply(names(heatmap_list), function(season) {
+  ggplot(heatmap_list[[season]], aes(x = x_bin, y = y_bin, fill = count)) +
+    geom_tile(color = "grey80") +
+    scale_fill_gradient(low = "white", high = "red") +
+    scale_y_reverse() +
+    coord_fixed() +
+    labs(
+      title = paste("Animal Movement Heatmap -", season),
+      x = "X Grid",
+      y = "Y Grid",
+      fill = "Pass Count"
+    ) +
+    theme_minimal()
+})
+plots[[9]]
+
+#Total plot per season
+ggplot(heatmap_data, aes(x = x_bin, y = y_bin, fill = count)) +
+  geom_tile(color = "grey80") +
+  scale_fill_gradient(low = "white", high = "red") +
+  coord_fixed() +
+  scale_y_reverse() +
+  labs(
+    title = "Animal movement heatmap by season",
+    x = "X grid",
+    y = "Y grid",
+    fill = "Pass count"
+  ) +
+  facet_wrap(~season)
+  theme_minimal()
 
 foraging_master<- foraging_master %>% 
   mutate(season_id = paste(season, ID, sep = "_"))
 foraging_master <- foraging_master %>% 
   left_join(similarities %>% select(season_id, mean_similarity), by = "season_id")
-#Join to the master
-# metrics_to_join <- results_df %>%
-#   select(unique_trial_ID, distance_total_cm, straightness_total, straightness_travel, straightness_island)
-# foraging_master <- foraging_master %>%
-#   left_join(metrics_to_join, by = "unique_trial_ID")
 
 # ----- Plots -------
 
