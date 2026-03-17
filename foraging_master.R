@@ -82,16 +82,7 @@ trial_ls_processed <- map(trial_ls, function(df) {
           door_count / (12 - lag(door_count)),TRUE ~ NA_real_))
 })
 
-#Missing trial list
-missing_trials_df <- position_counts %>%
-  group_by(unique_ID) %>%
-  summarise(found_trials = list(trial), .groups = "drop") %>%
-  mutate(missing_trials = lapply(found_trials, function(x) setdiff(expected_trials, x))) %>%
-  select(unique_ID, missing_trials) %>%
-  unnest(missing_trials) 
-
 #Join the success rate to position count
-
 doors_summary_df <- bind_rows(trial_ls_processed)
 doors_summary_df <- doors_summary_df %>%
   select(unique_trial_ID, door_count, success_rate)
@@ -119,27 +110,13 @@ b <- ggplot(position_counts, aes(x = success_rate)) +
   facet_wrap(~season)
 a
 b
-max(position_counts$success_rate)
 
 # Master df -----
 foraging_master <- result %>%
   distinct(unique_trial_ID) %>%
   filter(unique_trial_ID != "unique_trial_ID") %>%
-  separate(unique_trial_ID, into = c("season", "ID", "trial"),sep = "_", remove = FALSE)
-  
-# ----- First frame and time to baited island interaction and join 
-first_success <- result %>%
-  filter(island_debug %in% c("A", "D")) %>%
-  filter(unique_trial_ID != "unique_trial_ID") %>%
-  mutate(frame = as.numeric(frame)) %>%
-  group_by(unique_trial_ID) %>%
-  slice_min(frame, n = 1, with_ties = FALSE) %>%
-  ungroup() %>%
-  transmute(unique_trial_ID, first_AD_frame = frame, first_AD_island = island_debug, first_AD_door = place)
-
-foraging_master <- foraging_master %>%
-  left_join(first_success, by = "unique_trial_ID") %>%
-  mutate(first_AD_time = round(first_AD_frame / 30, 2))
+  separate(unique_trial_ID, into = c("season", "ID", "trial"),sep = "_", remove = FALSE) %>% 
+  mutate(season_ID = paste(season, ID, sep = "_"))
 
 # --- First frame and time of island interaction and join ---
 first_success <- result %>%
@@ -202,82 +179,55 @@ foraging_master <- foraging_master %>%
   mutate (nonmoving_time = pmax(round(nonmoving_frames * (1/30), 2), 0))
 #Time moving
 foraging_master <- foraging_master %>% 
-  mutate(moving_time = round(last_frame * 30, 2))
+  mutate(moving_time = round(last_frame * (1/30), 2))
 
-#Ordering the columns
-foraging_master <- foraging_master %>%
-  select(unique_trial_ID, season, ID, trial, first_island_time, A, B, C, D, travelling_time, islands_time, nonmoving_time, moving_time)
 
-# # ----- Loop for trajr --
+##--- Distance covered in cm ----
+# Clean trajectory data (time, x and y)
 df_trajectory <- result %>%
-  select(unique_trial_ID, season, ID, trial, time, x, y, journey) %>%
-  mutate(time = as.numeric(time)) %>%
+  select(unique_trial_ID, season, ID, trial, time, x, y) %>%
   filter(!is.na(x), !is.na(y), !is.na(time)) %>%
   arrange(unique_trial_ID, time)
 
-#List by unique_trial_ID
-df_list <- df_trajectory %>%
-  group_split(unique_trial_ID) %>%
-  setNames(unique(df_trajectory$unique_trial_ID))
-
-#Trajectory function
-safe_traj <- function(df) {
-  df <- df %>% filter(!is.na(x), !is.na(y), !is.na(time))
-  if (nrow(df) < 2) return(NULL)
-  TrajFromCoords(df, xCol = "x", yCol = "y", fps = 30, spatialUnits = "cm")}
-
-#Metrics calculation
-compute_metrics <- function(df_trial) {
-  trial_id <- df_trial$unique_trial_ID[1]
-  season   <- df_trial$season[1]
-  ID       <- df_trial$ID[1]
-  trial    <- df_trial$trial[1]
-#Total trajectory
-  traj_all <- safe_traj(df_trial)
-  if (is.null(traj_all)) return(NULL)
-  distance_tot      <- TrajLength(traj_all)
-  straightness_tot  <- TrajStraightness(traj_all)
-#Travelling trajectory
-  df_travel <- df_trial %>%
-    filter(journey == "travelling")
-  traj_travel <- safe_traj(df_travel)
-  straightness_travel <- ifelse(
-    is.null(traj_travel), NA, TrajStraightness(traj_travel))
-#Island trajectory
-  df_island <- df_trial %>%
-    filter(grepl("^at_", journey))
-  traj_island <- safe_traj(df_island)
-  straightness_island <- ifelse(
-    is.null(traj_island), NA, TrajStraightness(traj_island))
-#Output
+# Function to compute total distance
+compute_distance <- function(df) {
+  if(nrow(df) < 2) return(NULL)
+  traj <- TrajFromCoords(df[,c("x","y")],
+                         fps = 30,
+                         spatialUnits = "cm")
   data.frame(
-    unique_trial_ID       = trial_id,
-    season                = season,
-    ID                    = ID,
-    trial                 = trial,
-    distance_total_cm     = distance_tot,
-    straightness_total    = straightness_tot,
-    straightness_travel   = straightness_travel,
-    straightness_island   = straightness_island)}
+    unique_trial_ID = df$unique_trial_ID[1],
+    season          = df$season[1],
+    ID              = df$ID[1],
+    trial           = df$trial[1],
+    distance_total_cm = TrajLength(traj)
+  )
+}
 
-#Run for all the trials
-results_df <- df_list %>%
-  lapply(compute_metrics) %>%
-  bind_rows()
-
-results_df <- results_df %>%
-  mutate(distance_total_cm   = round(distance_total_cm, 2),
-         straightness_total  = round(straightness_total, 5),
-         straightness_travel = round(straightness_travel, 5),
-         straightness_island = round(straightness_island, 5))
+# Apply to each trial
+results_df <- df_trajectory %>%
+  group_split(unique_trial_ID) %>%
+  map_dfr(compute_distance) %>%
+  mutate(distance_total_cm = round(distance_total_cm, 2))
 
 #Join to the master
 metrics_to_join <- results_df %>%
-  select(unique_trial_ID, distance_total_cm, straightness_total, straightness_travel, straightness_island)
+  select(unique_trial_ID, distance_total_cm)
 foraging_master <- foraging_master %>%
   left_join(metrics_to_join, by = "unique_trial_ID")
+#normalisation total_distance_cm and plot
+foraging_master <- foraging_master %>%
+  mutate(distance_rate = round(distance_total_cm / moving_time, 2))
 
-## Similarities in the areas covered ----
+#Ordering the columns
+foraging_master <- foraging_master %>%
+  select(unique_trial_ID, season, ID, trial, season_ID, first_island_time, first_island, A, B, C, D, travelling_time, 
+         islands_time, nonmoving_time, moving_time, distance_total_cm, distance_rate)
+
+#Save csv
+write.csv( foraging_master, here("csv/processed", "foraging_master.csv"),row.names = FALSE)
+
+# Similarities in the areas covered ----
 grid_size <- 30
 
 result_grid <- result %>%
@@ -286,106 +236,89 @@ result_grid <- result %>%
     y_bin = cut(y, breaks = grid_size, labels = FALSE))
 
 occupancy <- result_grid %>% 
-  mutate(season_id = paste(season, ID, sep = "_")) %>% 
-  count(season_id, trial, x_bin, y_bin) 
+  mutate(season_ID = paste(season, ID, sep = "_")) %>% 
+  count(season_ID, trial, x_bin, y_bin) 
   
 maps <- occupancy %>%
-  pivot_wider(
-    names_from = c(x_bin, y_bin),
-    values_from = n,
-    values_fill = 0)
+  pivot_wider(names_from = c(x_bin, y_bin), values_from = n, values_fill = 0)
 
 maps_norm <- maps %>%
   rowwise() %>%
-  mutate(across(-c(season_id, trial), ~ . / sum(c_across(-c(season_id, trial)))))
+  mutate(across(-c(season_ID, trial), ~ . / sum(c_across(-c(season_ID, trial)))))
 
+# Comparison among T1-T2 T2-T3 T3-T4
+# Function for the correlation of two vectors
 similarity_fun <- function(a,b){
   cor(a,b)
 }
 
-similarities <- maps_norm %>%
-  group_by(season_id) %>%
-  arrange(trial, .by_group = TRUE) %>%
+similarities_1to4 <- maps_norm %>%
+  group_by(season_ID) %>%
+  arrange(trial, .by_group = TRUE) %>% #need to turn maps_norm into matrix
   group_modify(~{
-    
-    mat <- as.matrix(.x[,-c(1,2)])
-    
-    sims <- sapply(1:(nrow(mat)-1), function(i){
-      similarity_fun(mat[i, ], mat[i+1, ])
+    mat <- as.matrix(.x[,-c(1,2)]) #remove first 2 columns
+    sims <- sapply(1:(nrow(mat)-1), function(i){ 
+      similarity_fun(mat[i, ], mat[i+1, ]) #compare the 3 pairs of trials
     })
-    
-    tibble(mean_similarity = mean(sims))
+    tibble(mean_similarity = mean(sims)) #calculate mean similarity
   })
 
-# Summarize occupancy per square per season_id
-heatmap_data <- occupancy %>%
-  mutate(season_id = as.character(season_id), season = sub("_.*$", "", season_id)) %>%
-  group_by(season_id, season, x_bin, y_bin) %>%
-  summarise(count = sum(n), .groups = "drop") %>%
-  mutate(x_bin = as.numeric(x_bin), y_bin = as.numeric(y_bin))
+#Comparison of 1-2 and 3-4
+similarities_2days <- maps_norm %>%
+  group_by(season_ID) %>%
+  arrange(trial, .by_group = TRUE) %>%
+  group_modify(~{
+    mat <- as.matrix(.x[,-c(1,2)])
+    idx <- seq(1, nrow(mat)-1, by = 2) #only 2 pair of trials 
+    sims <- sapply(idx, function(i){
+      similarity_fun(mat[i, ], mat[i+1, ])
+    })
+    tibble(mean_similarity = mean(sims, na.rm = TRUE))
+  })
 
-# Split data by season_id
-heatmap_list <- split(heatmap_data, heatmap_data$season_id)
+#Comparison of 1-3 and 2-4
+similarities_noncons <- maps_norm %>%
+  group_by(season_ID) %>%
+  arrange(trial, .by_group = TRUE) %>%
+  group_modify(~{
+    mat <- as.matrix(.x[,-c(1,2)])
+    sims <- c()
+    if(nrow(mat) >= 3){
+      sims <- c(sims, similarity_fun(mat[1,], mat[3,]))
+    }
+    if(nrow(mat) >= 4){
+      sims <- c(sims, similarity_fun(mat[2,], mat[4,]))
+    }
+    tibble(mean_similarity = mean(sims, na.rm = TRUE))
+  })
 
-#plot for each season_id
-plots <- lapply(names(heatmap_list), function(season) {
-  ggplot(heatmap_list[[season]], aes(x = x_bin, y = y_bin, fill = count)) +
-    geom_tile(color = "grey80") +
-    scale_fill_gradient(low = "white", high = "red") +
-    scale_y_reverse() +
-    coord_fixed() +
-    labs(
-      title = paste("Animal Movement Heatmap -", season),
-      x = "X Grid",
-      y = "Y Grid",
-      fill = "Pass Count"
-    ) +
-    theme_minimal()
-})
-plots[[9]]
-
-#Total plot per season
-ggplot(heatmap_data, aes(x = x_bin, y = y_bin, fill = count)) +
-  geom_tile(color = "grey80") +
-  scale_fill_gradient(low = "white", high = "red") +
-  coord_fixed() +
-  scale_y_reverse() +
-  labs(
-    title = "Animal movement heatmap by season",
-    x = "X grid",
-    y = "Y grid",
-    fill = "Pass count"
-  ) +
-  facet_wrap(~season)
-  theme_minimal()
-
-foraging_master<- foraging_master %>% 
-  mutate(season_id = paste(season, ID, sep = "_"))
-foraging_master <- foraging_master %>% 
-  left_join(similarities %>% select(season_id, mean_similarity), by = "season_id")
+#Rename the columns 
+similarities_1to4<- similarities_1to4 %>% rename(sim_1to4 = mean_similarity)
+similarities_2days <- similarities_2days %>% rename(sim_2days = mean_similarity)
+similarities_noncons <- similarities_noncons %>% rename(sim_noncons = mean_similarity)
+#Merge
+foraging_similarities <- similarities_1to4 %>%
+  left_join(similarities_2days, by = "season_ID") %>%
+  left_join(similarities_noncons, by = "season_ID") %>% 
+  separate(season_ID, into = c("season", "ID"),sep = "_", remove = FALSE)
+#Save csv
+write.csv(foraging_similarities, here("csv/processed", "foraging_similarities.csv"),row.names = FALSE)
 
 # ----- Plots -------
 
-#plot and anova
-zones <- similarities %>% 
-  separate(season_id, into = c("season", "ID"),sep = "_", remove = FALSE)
-ggplot(zones, aes(x = season, y = mean_similarity, color = season)) +
-  #geom_violin(fill = "skyblue", color = "black") +
-  geom_boxplot(fill = "skyblue", color = "black") +
-  geom_jitter(width = 0.15, size = 2, alpha = 0.7) 
+#Plot the island interactions count
+#Here we can switch trial and season 
+all_letters_long <- foraging_master %>%
+  pivot_longer(cols = c(A, B, C, D),
+    names_to = "letter",
+    values_to = "count")
+ggplot(all_letters_long, aes(x = letter, y = count, fill = season)) +
+  geom_col(position = "dodge") +
+  facet_wrap (~ trial) +
+  labs(x = "Island door interaction", y = "Count", fill = "Season") +
+  theme_classic() 
 
-anova_model <- aov(mean_similarity ~ season, data = zones)
-summary(anova_model)
-plot(anova_model)
-TukeyHSD(anova_model)
-
-#normalisation total_distance_cm and plot
-
-foraging_master <- foraging_master %>%
-  mutate(distance_rate = distance_total_cm / moving_time)
-#Save csv
-write.csv( foraging_master, here("csv/processed", "foraging_master.csv"),row.names = FALSE)
-
+#Plot the distance rate
 ggplot(foraging_master, aes(x = season, y = distance_rate, color = season)) +
   #geom_violin(fill = "skyblue", color = "black") +
   geom_boxplot(fill = "skyblue", color = "black") +
@@ -400,25 +333,13 @@ ggplot(foraging_master, aes(x = trial, y = moving_time, color = season))+
   theme_classic()
                                                                                                                                                                                    
 #Plot for the distance covered
-ggplot(foraging_master, aes(x = trial, y = distance_total_cm)) +
+ggplot(foraging_master, aes(x = trial, y = distance_total_cm, color = season)) +
   geom_violin(fill = "skyblue", color = "black") +
   #geom_boxplot(fill = "skyblue", color = "black") +
-  geom_jitter(width = 0.15, size = 2, alpha = 0.7, color = "darkblue") +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.7) +
   facet_wrap (~ season) +
   theme_minimal(base_size = 14) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-#Plot the island interactions count
-#Here we can switch trial and season 
-all_letters_long <- foraging_master %>%
-  pivot_longer(cols = c(A, B, C, D),
-    names_to = "letter",
-    values_to = "count")
-ggplot(all_letters_long, aes(x = letter, y = count, fill = season)) +
-  geom_col(position = "dodge") +
-  facet_wrap (~ trial) +
-  labs(x = "Island door interaction", y = "Count", fill = "Season") +
-  theme_classic() 
 
 #Plot the time to the first island
 ggplot(foraging_master, aes(x = season, y = first_island_time, color = trial)) +
@@ -429,25 +350,51 @@ ggplot(foraging_master, aes(x = season, y = first_island_time, color = trial)) +
   facet_wrap (~ trial) +
   theme_minimal(base_size = 14)
 
-#Plot the straightness
-foraging_master_filt <- foraging_master %>%
-  filter(straightness_total <= 0.05)
-ggplot(foraging_master_filt, aes(x = season, y = straightness_total, color = season)) +
-  geom_violin(fill = "skyblue", color = "black") +
-  #geom_boxplot(fill = "skyblue", color = "black") +
-  geom_jitter(width = 0.15, size = 2, alpha = 0.7) +
-  facet_wrap (~ trial) +
-  theme_minimal(base_size = 14) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+# Summarize occupancy per square per season_ID
+heatmap_data <- occupancy %>%
+  mutate(season_ID = as.character(season_ID), season = sub("_.*$", "", season_ID)) %>%
+  group_by(season_ID, season, x_bin, y_bin) %>%
+  summarise(count = sum(n), .groups = "drop") %>%
+  mutate(x_bin = as.numeric(x_bin), y_bin = as.numeric(y_bin))
+# Split data by season_ID
+heatmap_list <- split(heatmap_data, heatmap_data$season_ID)
+#plot for each season_ID summed trials
+plots <- lapply(names(heatmap_list), function(season) {
+  ggplot(heatmap_list[[season]], aes(x = x_bin, y = y_bin, fill = count)) +
+    geom_tile(color = "grey80") +
+    scale_fill_gradientn(colours = c("#ffffcc", "#ffeda0", "#feb24c", "#fd8d3c", "#f03b20"))+
+    scale_y_reverse() +
+    coord_fixed() +
+    labs(
+      title = paste("Animal Movement Heatmap -", season),
+      x = "X Grid",
+      y = "Y Grid",
+      fill = "Pass Count"
+    ) +
+    theme_minimal()
+})
+plots[[15]]
+#Total plot per season
+ggplot(heatmap_data, aes(x = x_bin, y = y_bin, fill = count)) +
+  geom_tile(color = "grey80") +
+  scale_fill_gradientn(colours = c("#ffffcc", "#ffeda0", "#feb24c", "#fd8d3c", "#f03b20"))+
+  coord_fixed() +
+  scale_y_reverse() +
+  labs(
+    title = "Animal movement heatmap by season",
+    x = "X grid",
+    y = "Y grid",
+    fill = "Pass count"
+  ) +
+  facet_wrap(~season)+
+  theme_minimal()
+  
+#Plot for similarities and anova
+ggplot(foraging_similarities, aes(x = season, y = sim_1to4, color = season))+ #y=sim_noncons or y=sim_2days
+  geom_boxplot(fill = "lightblue", color = "black") +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.7) 
 
-#Plot the time to reach the first successful island per trial per season
-foraging_master_filtr <- foraging_master %>%
-  filter(first_AD_time <= 200)
-ggplot(foraging_master_filtr, aes(x = season, y = first_AD_time, color = season)) +
-  geom_violin(fill = "skyblue", color = "black") +
-  #geom_boxplot(fill = "skyblue", color = "black") +
-  geom_jitter(width = 0.15, size = 2, alpha = 0.7) +
-  facet_wrap (~ trial)+
-  labs(x = "Season and Trial", y = "Time to first baited island (seconds)", title = "First AD Time per Season and Trial") +
-  theme_minimal(base_size = 14) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+anova_model_sim <- aov(sim_1to4 ~ season, data = foraging_similarities)
+summary(anova_model_sim)
+plot(anova_model_sim)
+TukeyHSD(anova_model_sim)
