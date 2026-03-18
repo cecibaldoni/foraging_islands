@@ -142,7 +142,8 @@ letter_food_counts <- result %>%
   pivot_wider(names_from = letter_food, values_from = count, values_fill = 0)
 
 foraging_master <- foraging_master %>%
-  left_join(letter_food_counts, by = "unique_trial_ID")
+  left_join(letter_food_counts, by = "unique_trial_ID") %>% 
+  mutate (tot_visit = rowSums(across(c(A, B, C, D)), na.rm = TRUE))
 
 ## ----- Time management -----
 #Travel time
@@ -221,8 +222,8 @@ foraging_master <- foraging_master %>%
 
 #Ordering the columns
 foraging_master <- foraging_master %>%
-  select(unique_trial_ID, season, ID, trial, season_ID, first_island_time, first_island, A, B, C, D, travelling_time, 
-         islands_time, nonmoving_time, moving_time, distance_total_cm, distance_rate)
+  select(unique_trial_ID, season, ID, trial, season_ID, first_island_time, first_island, A, B, C, D, tot_visit,
+         travelling_time, islands_time, nonmoving_time, moving_time, distance_total_cm, distance_rate)
 
 #Save csv
 write.csv( foraging_master, here("csv/processed", "foraging_master.csv"),row.names = FALSE)
