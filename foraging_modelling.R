@@ -1,6 +1,10 @@
 # Load packages
 library(lme4)
 library(lmerTest)
+library(here)
+library(mgcv)
+library(tidyverse)
+
 
 master <- read.csv(here("csv/processed/foraging_master.csv"))
 
@@ -9,14 +13,19 @@ master$trial <- as.factor(master$trial)
 master$season <- as.factor(master$season)
 
 
-model1 <- lmer(first_island_time ~ trial + season + (1 | season_ID), data = master)
+model1 <- glmer(first_island_time ~ trial + season + (1 | season_ID), data = master, family = Gamma)
 summary(model1)
 # Residual plot
 plot(model1)
 # Normality of residuals
 qqnorm(resid(model1))
 qqline(resid(model1))
-
+hist(master$first_island_time)
+summary(master$first_island_time)
+min(master$first_island_time, na.rm=TRUE)
+ggplot(master, aes(x = season, y = first_island_time, color = trial)) +
+  geom_boxplot()
+  
 # Total distance
 model_dist <- lmer(distance_rate ~ trial + season + (1 | season_ID), data = master)
 summary(model_dist)
