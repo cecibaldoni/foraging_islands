@@ -230,29 +230,67 @@ write.csv( foraging_master, here("csv/processed", "foraging_master.csv"),row.nam
 
 # Similarities in the areas covered ----
 grid_size <- 30
+# Mh. A 30×30 grid = 900 cells
+#This means that  most will be zero for any given trial
+# Correlating two very sparse vectors inflates similarity
+# if they avoid 850 cells, they look very similar just by sharing zeros
+# 
+# result_grid <- result %>%
+#   mutate(
+#     x_bin = cut(x, breaks = grid_size, labels = FALSE),
+#     y_bin = cut(y, breaks = grid_size, labels = FALSE))
+# 
+# occupancy <- result_grid %>% 
+#   mutate(season_ID = paste(season, ID, sep = "_")) %>% 
+#   count(season_ID, trial, x_bin, y_bin) 
+#   
+# maps <- occupancy %>%
+#   pivot_wider(names_from = c(x_bin, y_bin), values_from = n, values_fill = 0)
+# 
+# maps_norm <- maps %>%
+#   rowwise() %>%
+#   # mutate(across(-c(season_ID, trial), ~ . / sum(c_across(-c(season_ID, trial)))))
+#   # This is incorrect
+#   mutate(row_total = sum(c_across(-c(season_ID, trial)))) %>%
+#   mutate(across(-c(season_ID, trial, row_total), ~ . / row_total)) %>%
+#   select(-row_total)
+# 
+# # Comparison among T1-T2 T2-T3 T3-T4
+# # Function for the correlation of two vectors
+# similarity_fun <- function(a,b){
+#   cor(a,b)
+# }
+
+grid_size <- 10  # reduced from 30 (so 10x10 = 100 cells, much less sparse)
 
 result_grid <- result %>%
+  filter(!is.na(x), !is.na(y)) %>%          # guard against NAs in coordinates
   mutate(
     x_bin = cut(x, breaks = grid_size, labels = FALSE),
-    y_bin = cut(y, breaks = grid_size, labels = FALSE))
+    y_bin = cut(y, breaks = grid_size, labels = FALSE)
+  )
 
-occupancy <- result_grid %>% 
-  mutate(season_ID = paste(season, ID, sep = "_")) %>% 
-  count(season_ID, trial, x_bin, y_bin) 
-  
+occupancy <- result_grid %>%
+  mutate(season_ID = paste(season, ID, sep = "_")) %>%
+  count(season_ID, trial, x_bin, y_bin)
+
 maps <- occupancy %>%
   pivot_wider(names_from = c(x_bin, y_bin), values_from = n, values_fill = 0)
 
+# compute row total first, then divide
 maps_norm <- maps %>%
   rowwise() %>%
-  mutate(across(-c(season_ID, trial), ~ . / sum(c_across(-c(season_ID, trial)))))
+  mutate(row_total = sum(c_across(-c(season_ID, trial)))) %>%
+  mutate(across(-c(season_ID, trial, row_total), ~ . / row_total)) %>%
+  select(-row_total) %>%
+  ungroup()
 
-# Comparison among T1-T2 T2-T3 T3-T4
-# Function for the correlation of two vectors
-similarity_fun <- function(a,b){
-  cor(a,b)
+# Bhattacharyya coefficient instead of Pearson correlation
+similarity_fun <- function(a, b) {
+  sum(sqrt(a * b))  # BC: ranges 0 (no overlap) to 1 (identical)
 }
 
+# The same three comparisons 
 similarities_1to4 <- maps_norm %>%
   group_by(season_ID) %>%
   arrange(trial, .by_group = TRUE) %>% #need to turn maps_norm into matrix
@@ -262,6 +300,24 @@ similarities_1to4 <- maps_norm %>%
       similarity_fun(mat[i, ], mat[i+1, ]) #compare the 3 pairs of trials
     })
     tibble(mean_similarity = mean(sims)) #calculate mean similarity
+  })
+
+#se ho capito bene, questo code compara gni trial con il suo vicino
+#quidi T1S1 con T2S1 con T1S2 con T2S2. T1S1 and T2S2 are never directly compared to each other.
+#not necessarily wrong, but just need to be sure that that is what you want
+
+# Comparison of first trial (T1S1) vs last trial (T2S2) only
+similarities_firstlast <- maps_norm %>%
+  group_by(season_ID) %>%
+  arrange(trial, .by_group = TRUE) %>%
+  group_modify(~{
+    mat <- as.matrix(.x[,-c(1,2)])
+    if(nrow(mat) >= 4){
+      sim <- similarity_fun(mat[1,], mat[4,])
+    } else {
+      sim <- NA_real_
+    }
+    tibble(mean_similarity = sim)
   })
 
 #Comparison of 1-2 and 3-4
