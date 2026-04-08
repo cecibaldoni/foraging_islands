@@ -51,7 +51,7 @@ return(df_id)})
 
 names(trial_ls) <- unique_ids
 
-#Success rate
+#Efficiency rate
 #Find AD
 doors_AD <- function(df) {
   grep("^(A|D)_", names(df), value = TRUE)
@@ -75,7 +75,7 @@ trial_ls_processed <- map(trial_ls, function(df) {
    
   df <- df  %>%
     arrange(trial) %>%
-    mutate(success_rate = case_when(
+    mutate(efficiency_rate = case_when(
         trial %in% c("T1S1", "T2S1") ~ door_count / 12,
         trial %in% c("T1S2", "T2S2") &
           (12 - lag(door_count)) > 0 ~
@@ -85,27 +85,27 @@ trial_ls_processed <- map(trial_ls, function(df) {
 #Join the success rate to position count
 doors_summary_df <- bind_rows(trial_ls_processed)
 doors_summary_df <- doors_summary_df %>%
-  select(unique_trial_ID, door_count, success_rate)
+  select(unique_trial_ID, door_count, efficiency_rate)
 position_counts <- position_counts %>%
-  select(-any_of(c("door_count", "success_rate"))) %>%
+  select(-any_of(c("door_count", "efficiency_rate"))) %>%
   left_join(doors_summary_df, by = "unique_trial_ID") %>% 
-  mutate (door_count = replace_na(door_count, 0), success_rate = replace_na(success_rate, 0))
+  mutate (door_count = replace_na(door_count, 0), efficiency_rate = replace_na(efficiency_rate, 0))
 
 #Save csv
 write.csv( position_counts, here("csv/processed", "interactions_counts.csv"),row.names = FALSE)
 
 #Plot success rate per trial
-ggplot(position_counts, aes(x =trial, y = success_rate)) +
+ggplot(position_counts, aes(x =trial, y = efficiency_rate)) +
   geom_jitter(width = 0.15, size = 2, alpha = 0.7, color = "darkblue") +
   #geom_smooth(aes(group = 1), method = "loess", se = FALSE, color = "black", linewidth = 1) +
   facet_wrap (~ season)+
-  labs(x = "Season and Trial", y = "Success rate") +
+  labs(x = "Season and Trial", y = "Efficiency rate") +
   theme_bw(base_size = 14) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-a <- ggplot(position_counts, aes(x = success_rate)) +
+a <- ggplot(position_counts, aes(x = efficiency_rate)) +
   geom_density(fill = "blue", alpha = 0.4)
-b <- ggplot(position_counts, aes(x = success_rate)) +
+b <- ggplot(position_counts, aes(x = efficiency_rate)) +
   geom_density(fill = "blue", alpha = 0.4) +
   facet_wrap(~season)
 a
@@ -229,55 +229,26 @@ foraging_master <- foraging_master %>%
 write.csv( foraging_master, here("csv/processed", "foraging_master.csv"),row.names = FALSE)
 
 # Similarities in the areas covered ----
-grid_size <- 30
-# Mh. A 30×30 grid = 900 cells
-#This means that  most will be zero for any given trial
-# Correlating two very sparse vectors inflates similarity
-# if they avoid 850 cells, they look very similar just by sharing zeros
-# 
-# result_grid <- result %>%
-#   mutate(
-#     x_bin = cut(x, breaks = grid_size, labels = FALSE),
-#     y_bin = cut(y, breaks = grid_size, labels = FALSE))
-# 
-# occupancy <- result_grid %>% 
-#   mutate(season_ID = paste(season, ID, sep = "_")) %>% 
-#   count(season_ID, trial, x_bin, y_bin) 
-#   
-# maps <- occupancy %>%
-#   pivot_wider(names_from = c(x_bin, y_bin), values_from = n, values_fill = 0)
-# 
-# maps_norm <- maps %>%
-#   rowwise() %>%
-#   # mutate(across(-c(season_ID, trial), ~ . / sum(c_across(-c(season_ID, trial)))))
-#   # This is incorrect
-#   mutate(row_total = sum(c_across(-c(season_ID, trial)))) %>%
-#   mutate(across(-c(season_ID, trial, row_total), ~ . / row_total)) %>%
-#   select(-row_total)
-# 
-# # Comparison among T1-T2 T2-T3 T3-T4
-# # Function for the correlation of two vectors
-# similarity_fun <- function(a,b){
-#   cor(a,b)
-# }
+grid_size <- 10  # so 10x10 = 100 cells, much less sparse
 
-grid_size <- 10  # reduced from 30 (so 10x10 = 100 cells, much less sparse)
-
+#Coordinates into grid cells
 result_grid <- result %>%
-  filter(!is.na(x), !is.na(y)) %>%          # guard against NAs in coordinates
+  filter(!is.na(x), !is.na(y)) %>%    #Remove rows with missing coordinates      
   mutate(
-    x_bin = cut(x, breaks = grid_size, labels = FALSE),
+    x_bin = cut(x, breaks = grid_size, labels = FALSE), #Each point belong to a grid cell, so instead of coordinates we have a xy grid cell
     y_bin = cut(y, breaks = grid_size, labels = FALSE)
   )
 
+#Count of times shrew visited each cell
 occupancy <- result_grid %>%
   mutate(season_ID = paste(season, ID, sep = "_")) %>%
   count(season_ID, trial, x_bin, y_bin)
 
+#Convert to wide matrix: each row a trial and each column a grid cell
 maps <- occupancy %>%
   pivot_wider(names_from = c(x_bin, y_bin), values_from = n, values_fill = 0)
 
-# compute row total first, then divide
+#Normalize the occupancy because trials may have different duration. It converts counts into proportion.
 maps_norm <- maps %>%
   rowwise() %>%
   mutate(row_total = sum(c_across(-c(season_ID, trial)))) %>%
@@ -285,26 +256,28 @@ maps_norm <- maps %>%
   select(-row_total) %>%
   ungroup()
 
-# Bhattacharyya coefficient instead of Pearson correlation
+# Bhattacharyya coefficient 
 similarity_fun <- function(a, b) {
   sum(sqrt(a * b))  # BC: ranges 0 (no overlap) to 1 (identical)
 }
 
-# The same three comparisons 
+#Comparison of chronological trials T1S1vsT1S2, T1S2vsT2S1 and T2S1vsT2S2 then compute mean similarity and
+#sd to check how similarity changes across trials (high sd means stable pattern low sd mean unstable pattern).
 similarities_1to4 <- maps_norm %>%
   group_by(season_ID) %>%
   arrange(trial, .by_group = TRUE) %>% #need to turn maps_norm into matrix
   group_modify(~{
     mat <- as.matrix(.x[,-c(1,2)]) #remove first 2 columns
+    if(nrow(mat) >= 4)
     sims <- sapply(1:(nrow(mat)-1), function(i){ 
       similarity_fun(mat[i, ], mat[i+1, ]) #compare the 3 pairs of trials
     })
-    tibble(mean_similarity = mean(sims)) #calculate mean similarity
+    else {
+      sims <- NA_real_
+    }
+    tibble(mean_similarity = mean(sims),
+           sd_similarity = sd(sims)) 
   })
-
-#se ho capito bene, questo code compara gni trial con il suo vicino
-#quidi T1S1 con T2S1 con T1S2 con T2S2. T1S1 and T2S2 are never directly compared to each other.
-#not necessarily wrong, but just need to be sure that that is what you want
 
 # Comparison of first trial (T1S1) vs last trial (T2S2) only
 similarities_firstlast <- maps_norm %>%
@@ -320,20 +293,25 @@ similarities_firstlast <- maps_norm %>%
     tibble(mean_similarity = sim)
   })
 
-#Comparison of 1-2 and 3-4
+#Comparison of trials in two different days T1S1vsT1S2 and T2S1vsT2S2
 similarities_2days <- maps_norm %>%
   group_by(season_ID) %>%
   arrange(trial, .by_group = TRUE) %>%
   group_modify(~{
     mat <- as.matrix(.x[,-c(1,2)])
     idx <- seq(1, nrow(mat)-1, by = 2) #only 2 pair of trials 
+    if(nrow(mat) >= 4)
     sims <- sapply(idx, function(i){
       similarity_fun(mat[i, ], mat[i+1, ])
     })
-    tibble(mean_similarity = mean(sims, na.rm = TRUE))
+    else {
+      sims <- NA_real_
+    }
+    tibble(mean_similarity = mean(sims, na.rm = TRUE), 
+           sd_similarity = sd(sims, na.rm = TRUE))
   })
 
-#Comparison of 1-3 and 2-4
+#Comparison of non consecutive trials: first trials of the day (T1S1vsT2S1 and T1S2vsT2S2)
 similarities_noncons <- maps_norm %>%
   group_by(season_ID) %>%
   arrange(trial, .by_group = TRUE) %>%
@@ -346,15 +324,22 @@ similarities_noncons <- maps_norm %>%
     if(nrow(mat) >= 4){
       sims <- c(sims, similarity_fun(mat[2,], mat[4,]))
     }
-    tibble(mean_similarity = mean(sims, na.rm = TRUE))
+    else {
+      sims <- NA_real_
+    }
+    tibble(mean_similarity = mean(sims, na.rm = TRUE), 
+           sd_similarity = sd(sims))
   })
 
-#Rename the columns 
-similarities_1to4<- similarities_1to4 %>% rename(sim_1to4 = mean_similarity)
-similarities_2days <- similarities_2days %>% rename(sim_2days = mean_similarity)
-similarities_noncons <- similarities_noncons %>% rename(sim_noncons = mean_similarity)
+#Rename the columns(mean)
+similarities_1to4 <- similarities_1to4 %>% rename(mean_sim_1to4 = mean_similarity, sd_1to4 = sd_similarity)
+similarities_firstlast <- similarities_firstlast %>% rename(mean_firstlast = mean_similarity)
+similarities_2days <- similarities_2days %>% rename(mean_sim_2days = sim_2days, sd_2days = sd_similarity)
+similarities_noncons <- similarities_noncons %>% rename(mean_sim_noncons = sim_noncons, sd_noncons = sd_similarity)
+
 #Merge
 foraging_similarities <- similarities_1to4 %>%
+  left_join(similarities_firstlast, by = "season_ID") %>% 
   left_join(similarities_2days, by = "season_ID") %>%
   left_join(similarities_noncons, by = "season_ID") %>% 
   separate(season_ID, into = c("season", "ID"),sep = "_", remove = FALSE)
@@ -415,11 +400,16 @@ heatmap_data <- occupancy %>%
   mutate(x_bin = as.numeric(x_bin), y_bin = as.numeric(y_bin))
 # Split data by season_ID
 heatmap_list <- split(heatmap_data, heatmap_data$season_ID)
+
 #plot for each season_ID summed trials
+#color gradient from 5 colors
+palette10 <- colorRampPalette(c("#ffffcc", "#ffeda0", "#feb24c", "#fd8d3c", "#f03b20"))(10)
+
+# Generate heatmaps
 plots <- lapply(names(heatmap_list), function(season) {
   ggplot(heatmap_list[[season]], aes(x = x_bin, y = y_bin, fill = count)) +
     geom_tile(color = "grey80") +
-    scale_fill_gradientn(colours = c("#ffffcc", "#ffeda0", "#feb24c", "#fd8d3c", "#f03b20"))+
+    scale_fill_gradientn(colours = palette10) +
     scale_y_reverse() +
     coord_fixed() +
     labs(
@@ -430,11 +420,11 @@ plots <- lapply(names(heatmap_list), function(season) {
     ) +
     theme_minimal()
 })
-plots[[15]]
+plots[[21]]
 #Total plot per season
 ggplot(heatmap_data, aes(x = x_bin, y = y_bin, fill = count)) +
   geom_tile(color = "grey80") +
-  scale_fill_gradientn(colours = c("#ffffcc", "#ffeda0", "#feb24c", "#fd8d3c", "#f03b20"))+
+  scale_fill_gradientn(colours = palette10)+
   coord_fixed() +
   scale_y_reverse() +
   labs(
@@ -447,11 +437,13 @@ ggplot(heatmap_data, aes(x = x_bin, y = y_bin, fill = count)) +
   theme_minimal()
   
 #Plot for similarities and anova
-ggplot(foraging_similarities, aes(x = season, y = sim_1to4, color = season))+ #y=sim_noncons or y=sim_2days
+ggplot(foraging_similarities, aes(x = season, y = sd_1to4, color = season))+ 
   geom_boxplot(fill = "lightblue", color = "black") +
   geom_jitter(width = 0.15, size = 2, alpha = 0.7) 
 
-anova_model_sim <- aov(sim_1to4 ~ season, data = foraging_similarities)
+anova_model_sim <- aov(mean_sim_1to4 ~ season, data = foraging_similarities)
 summary(anova_model_sim)
 plot(anova_model_sim)
 TukeyHSD(anova_model_sim)
+
+
