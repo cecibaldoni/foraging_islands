@@ -118,3 +118,4 @@ lapply(foraging_ls, function(x) {
   # Save to CSV
   write.table(df, file = foraging_edges_file, append = TRUE, sep = ",", row.names = FALSE, col.names = !file.exists(foraging_edges_file))
 })
+

@@ -334,8 +334,8 @@ similarities_noncons <- maps_norm %>%
 #Rename the columns(mean)
 similarities_1to4 <- similarities_1to4 %>% rename(mean_sim_1to4 = mean_similarity, sd_1to4 = sd_similarity)
 similarities_firstlast <- similarities_firstlast %>% rename(mean_firstlast = mean_similarity)
-similarities_2days <- similarities_2days %>% rename(mean_sim_2days = sim_2days, sd_2days = sd_similarity)
-similarities_noncons <- similarities_noncons %>% rename(mean_sim_noncons = sim_noncons, sd_noncons = sd_similarity)
+similarities_2days <- similarities_2days %>% rename(mean_sim_2days = mean_similarity, sd_2days = sd_similarity)
+similarities_noncons <- similarities_noncons %>% rename(mean_sim_noncons = mean_similarity, sd_noncons = sd_similarity)
 
 #Merge
 foraging_similarities <- similarities_1to4 %>%
@@ -361,15 +361,16 @@ ggplot(all_letters_long, aes(x = letter, y = count, fill = season)) +
   theme_classic() 
 
 #Plot the distance rate
-ggplot(foraging_master, aes(x = season, y = distance_rate, color = season)) +
+ggplot(foraging_master, aes(x = trial, y = distance_rate, color = season)) +
   #geom_violin(fill = "skyblue", color = "black") +
   geom_boxplot(fill = "skyblue", color = "black") +
   geom_jitter(width = 0.15, size = 2, alpha = 0.7) +
-  facet_wrap (~ trial)
+  facet_wrap (~ season)
 
 #Plot of the moving time
 ggplot(foraging_master, aes(x = trial, y = moving_time, color = season))+
-  geom_violin(width = 0.15, position = position_dodge(width = 0.8), outlier.shape = NA, alpha = 0.7) +
+  geom_boxplot(, color = "black")+
+ # geom_violin(width = 0.15, position = position_dodge(width = 0.8), outlier.shape = NA, alpha = 0.7) +
   geom_jitter(position = position_jitterdodge(jitter.width = 0.15, dodge.width = 0.8), size = 1, alpha = 0.4) +
   facet_wrap (~ season)+
   theme_classic()
