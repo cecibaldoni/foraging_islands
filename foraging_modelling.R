@@ -102,6 +102,3 @@ ggplot(edges, aes(x = trial, y = prop_time_edge))+
 
 
 #Models for path consistency using "path"
-
-hist(path$mean_sim_noncons)
-hist(path$sd_noncons)

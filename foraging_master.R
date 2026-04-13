@@ -419,9 +419,10 @@ plots <- lapply(names(heatmap_list), function(season) {
       y = "Y Grid",
       fill = "Pass Count"
     ) +
-    theme_minimal()
+  #  theme_minimal() # GRRRR
+    theme_bw()
 })
-plots[[21]]
+plots[[30]]
 #Total plot per season
 ggplot(heatmap_data, aes(x = x_bin, y = y_bin, fill = count)) +
   geom_tile(color = "grey80") +

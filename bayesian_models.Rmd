@@ -1,0 +1,326 @@
+---
+title: "Bayesian Models — Foraging Behaviour"
+author: ""
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Setup
+
+```{r packages}
+library(brms)
+library(tidyverse)
+library(here)
+
+# Optional but useful for plotting and summarising posterior distributions
+library(tidybayes)
+library(bayesplot)
+```
+
+```{r load-data}
+master      <- read.csv(here("csv/processed/foraging_master.csv"))
+path        <- read.csv(here("csv/processed/foraging_similarities.csv"))
+efficiency  <- read.csv(here("csv/processed/interactions_counts.csv"))
+edges       <- read.csv(here("csv/foraging_edges_new.csv"))
+
+edges <- edges %>%
+  mutate(season_ID = paste(season, ID, sep = "_")) %>%
+  mutate(prop_time_center = time_center / time_total)
+```
+
+```{r factor-setup}
+# Set factor levels so the models use summer as the reference category
+# and T1S1 as the reference trial
+master$season <- factor(master$season, levels = c("summer", "winter", "spring"))
+master$trial  <- factor(master$trial,  levels = c("T1S1", "T1S2", "T2S1", "T2S2"))
+
+edges$season  <- factor(edges$season,  levels = c("summer", "winter", "spring"))
+edges$trial   <- factor(edges$trial,   levels = c("T1S1", "T1S2", "T2S1", "T2S2"))
+
+path$season   <- factor(path$season,   levels = c("summer", "winter", "spring"))
+```
+
+You used `ordered = TRUE` for season and trial in teh other code. That fits a polynomial contrast (linear + quadratic trend) rather than comparing each level to a reference. We're switching to unordered factors here so each season and trial is compared directly against the reference level (summer and T1S1), which is usually more interpretable.
+
+
+# Model overview
+
+Here is a summary of all models we'll fit:
+
+| Model | Outcome | Data | Family | Random effect |
+|---|---|---|---|---|
+| `m_istime` | Time to first island | `master` | Lognormal | `(1 \| season_ID)` |
+| `m_dist` | Distance rate (cm/s) | `master` | Lognormal | `(1 \| season_ID)` |
+| `m_move` | Total moving time | `master` | Gaussian | `(1 \| season_ID)` |
+| `m_visit` | Total island visits | `master` | Negative binomial | `(1 \| season_ID)` |
+| `m_edge` | Proportion time at edge | `edges` | Beta | `(1 \| season_ID)` |
+| `m_sim1to4` | Spatial similarity (consecutive) | `path` | Beta | none |
+| `m_sim2days` | Spatial similarity (within-day) | `path` | Beta | none |
+| `m_simnoncons` | Spatial similarity (across-day) | `path` | Beta | none |
+
+A note on the random effect `(1 | season_ID)`: this is the individual animal ID (nested within season). It accounts for the fact that the same individual contributes multiple trials — without this, the model would treat each row as independent, which would underestimate uncertainty and inflate false positives.
+
+The path similarity models don't have a random effect because `path` is already summarised to one row per individual (the similarity is computed across trials, not within them).
+
+
+# Priors
+
+We use weakly informative priors throughout. These are not strong assumptions — they just rule out physically impossible effect sizes (e.g. an effect of 1000 on a log scale) and help the sampler converge. If you have domain knowledge about expected effect sizes, these can be tightened.
+
+```{r priors-lognormal}
+# For lognormal models (first island time, distance rate)
+priors_lognormal <- c(
+  prior(normal(0, 2), class = b),         # fixed effects (season, trial)
+  prior(normal(0, 3), class = Intercept), # overall mean (on log scale)
+  prior(exponential(1), class = sigma),   # residual SD
+  prior(exponential(1), class = sd)       # random effect SD
+)
+```
+
+```{r priors-gaussian}
+# For Gaussian models (moving time)
+priors_gaussian <- c(
+  prior(normal(0, 10), class = b),
+  prior(normal(0, 20), class = Intercept),
+  prior(exponential(1), class = sigma),
+  prior(exponential(1), class = sd)
+)
+```
+
+```{r priors-negbinom}
+# For negative binomial models (visit counts)
+priors_negbinom <- c(
+  prior(normal(0, 2), class = b),
+  prior(normal(0, 3), class = Intercept),
+  prior(exponential(1), class = sd),
+  prior(gamma(2, 0.1), class = shape)   # overdispersion parameter
+)
+```
+
+```{r priors-beta}
+# For Beta models (proportions and similarities)
+priors_beta <- c(
+  prior(normal(0, 2), class = b),
+  prior(normal(0, 2), class = Intercept),
+  prior(exponential(1), class = sd),
+  prior(exponential(1), class = phi)    # precision parameter (higher = less spread)
+)
+```
+
+---
+
+# Models from `master`
+
+## Time to first island
+
+How long does the animal take to reach any island for the first time? Shorter times suggest bolder or more efficient exploration. This uses a **lognormal** family because the outcome is a positive continuous variable that is right-skewed (a few animals take very long, most are faster).
+
+```{r m-istime, cache=TRUE}
+m_istime <- brm(first_island_time ~ season + trial + (1 | season_ID), data    = master,
+                family  = lognormal(),  prior   = priors_lognormal,  
+                chains = 4,  iter = 4000,  warmup  = 1000,  cores = 4,  seed = 4321)
+```
+
+```{r m-istime-check}
+# Quick model checks
+summary(m_istime)
+pp_check(m_istime, ndraws = 100)   # does the model reproduce the data distribution?
+plot(m_istime)                      # chain traceplots — should look like "fuzzy caterpillars"
+```
+
+**How to read the output:** 
+Each fixed effect (e.g. `seasonwinter`) shows the estimated difference from the reference level (summer, T1S1) on the log scale. `l-95% CI` and `u-95% CI` are the 95% credible interval — the range of values consistent with the data given your priors. If this interval does not include 0, the effect is credibly different from zero.
+**How to read the plots:**
+From the `pp_check`, you should see the dark blue line "contained" in the fuzzy light blue lines. The fuzzy light blue lines are the models, the dark blue line the data. If the dark blue line is somewhere else, it means that the model does not represent the data correctly, so you must adjust the model!
+
+
+## Distance rate
+
+Distance covered per second of moving time. This measures how fast and wide-ranging the animal's movement is, independently of how long it moved. Lognormal family again — positive, continuous, right-skewed.
+
+```{r m-dist, cache=TRUE}
+m_dist <- brm(distance_rate ~ season + trial + (1 | season_ID),  data = master,  family  = lognormal(),
+              prior = priors_lognormal,  
+              chains  = 4,  iter = 4000,  warmup  = 1000,  cores = 4,  seed = 4321)
+```
+
+```{r m-dist-check}
+summary(m_dist)
+pp_check(m_dist, ndraws = 100)
+```
+
+---
+
+## Total moving time
+
+How much of the session did the animal spend moving? Gaussian family — the sqrt transformation your student used is not needed here because `brms` can handle the raw values, but check the `pp_check` to confirm the Gaussian assumption holds.
+
+```{r m-move, cache=TRUE}
+m_move <- brm(moving_time ~ season + trial + (1 | season_ID),  data    = master,
+              family = gaussian(), prior = priors_gaussian,
+              chains = 4, iter = 4000, warmup = 1000, cores = 4, seed = 4321)
+```
+
+```{r m-move-check}
+summary(m_move)
+pp_check(m_move, ndraws = 100)
+```
+
+---
+
+## Total island visits
+
+How many times did the animal visit any island? This is a **count** — a non-negative integer. Rather than log-transforming it and using Gaussian (which is what your student did), we use a **negative binomial** family directly. This is more appropriate because:
+
+- Counts can't be negative, and a Gaussian model doesn't respect that
+- Count data often has more variance than a Poisson model assumes (overdispersion) — negative binomial handles this with a `shape` parameter
+
+```{r m-visit, cache=TRUE}
+m_visit <- brm(tot_visit ~ season + trial + (1 | season_ID), data = master,
+               family  = negbinomial(), prior = priors_negbinom,
+               chains = 4, iter = 4000, warmup = 1000, cores = 4, seed = 4321)
+```
+
+```{r m-visit-check}
+summary(m_visit)
+pp_check(m_visit, ndraws = 100)
+```
+
+---
+
+# Models from `edges`
+
+## Proportion of time at the edge
+
+What fraction of the session did the animal spend at the edge of the arena? This is a proportion strictly between 0 and 1, so we use a **Beta** family. Beta regression models proportions naturally — it produces an S-shaped distribution that respects the 0–1 boundary.
+
+> **Important:** Beta regression cannot handle exact 0s or exact 1s. Check your data first:
+
+```{r edge-check}
+range(edges$prop_time_edge, na.rm = TRUE)
+# If there are 0s or 1s, apply a small correction:
+# edges$prop_time_edge <- (edges$prop_time_edge * (nrow(edges) - 1) + 0.5) / nrow(edges)
+```
+
+```{r m-edge, cache=TRUE}
+m_edge <- brm(prop_time_edge ~ season + trial + (1 | season_ID),  data = edges,
+              family  = Beta(), prior = priors_beta, 
+              chains  = 4, iter= 4000, warmup = 1000, cores = 4, seed = 4321)
+```
+
+```{r m-edge-check}
+summary(m_edge)
+pp_check(m_edge, ndraws = 100)
+```
+
+---
+
+# Models from `path`
+
+These models use spatial similarity scores as outcomes. Each similarity score is a Bhattacharyya coefficient (0 = no overlap, 1 = identical space use) computed per individual across trials. Because `path` has one row per individual (30 rows), there is no repeated measures structure and no random effect needed.
+
+**Reminder:** These similarity scores were computed across all 4 trials, so `trial` cannot be used as a predictor here. Season is the only predictor.
+
+## Consecutive similarity (sim_1to4)
+
+Mean similarity across consecutive trial pairs (T1S1↔T1S2, T1S2↔T2S1, T2S1↔T2S2). Captures how smoothly space use changes across the experiment.
+
+```{r m-sim1to4, cache=TRUE}
+m_sim1to4 <- brm(sim_1to4 ~ season, data = path,
+                 family  = Beta(), prior = priors_beta[1:2, ],   # no sd prior needed (no random effect)
+                 chains  = 4,  iter= 4000,warmup = 1000,cores = 4,  seed = 4321)
+```
+
+```{r m-sim1to4-check}
+summary(m_sim1to4)
+pp_check(m_sim1to4, ndraws = 100)
+```
+
+---
+
+## Within-day similarity (sim_2days)
+
+Similarity between sessions on the same day (T1S1↔T1S2 and T2S1↔T2S2). High values mean the animal uses the same parts of the arena within a day.
+
+```{r m-sim2days, cache=TRUE}
+m_sim2days <- brm(sim_2days ~ season, data = path,
+                  family  = Beta(),  prior = priors_beta[1:2, ],
+                  chains  = 4,  iter= 4000,  warmup = 1000, cores = 4, seed = 4321)
+```
+
+```{r m-sim2days-check}
+summary(m_sim2days)
+pp_check(m_sim2days, ndraws = 100)
+```
+
+---
+
+## Across-day same-session similarity (sim_noncons)
+
+Similarity between the same session type across days (T1S1↔T2S1 and T1S2↔T2S2). High values mean the animal is consistent in *when* it explores similar areas — a possible indicator of routine or memory.
+
+```{r m-simnoncons, cache=TRUE}
+m_simnoncons <- brm(sim_noncons ~ season,  data = path,
+                    family = Beta(),  prior = priors_beta[1:2, ],
+                    chains = 4,  iter = 4000, warmup = 1000, cores = 4, seed = 4321)
+```
+
+```{r m-simnoncons-check}
+summary(m_simnoncons)
+pp_check(m_simnoncons, ndraws = 100)
+```
+
+
+# Posterior visualisation
+
+Once all models are fit, you can extract and plot the posterior distributions of the fixed effects. Here's a general template that works for any of the models above:
+
+```{r posterior-plot-example, eval=FALSE}
+# Replace m_istime with any model name
+m_istime %>%
+  gather_draws(`b_.*`, regex = TRUE) %>%
+  filter(.variable != "b_Intercept") %>%
+  ggplot(aes(x = .value, y = .variable)) +
+  stat_halfeye(.width = c(0.5, 0.95)) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  labs(x = "Posterior estimate", y = "Parameter",
+       title = "Posterior distributions — first island time") +
+  theme_bw()
+```
+
+---
+
+# Convergence diagnostics
+
+For every model, check these before trusting the results:
+
+```{r diagnostics-example, eval=FALSE}
+# R-hat values — should all be < 1.01
+# Bulk and tail ESS — should be > 400
+summary(m_istime)
+
+# Traceplots — chains should mix well ("fuzzy caterpillar" pattern)
+plot(m_istime)
+
+# Posterior predictive check — simulated data should match observed data
+pp_check(m_istime, ndraws = 100)
+```
+
+If R-hat values are above 1.01 or chains don't mix, try increasing `iter` or `warmup`, or reconsider the prior on the problematic parameter.
+
+---
+
+# Session info
+
+```{r session-info}
+sessionInfo()
+```
