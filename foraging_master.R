@@ -249,6 +249,7 @@ maps <- occupancy %>%
   pivot_wider(names_from = c(x_bin, y_bin), values_from = n, values_fill = 0)
 
 #Normalize the occupancy because trials may have different duration. It converts counts into proportion.
+#Change every count of square visit into proportion: if the shrew visited the square 2_2 30 times, to have a proportion I divided 30/n of total visits in all the squares.
 maps_norm <- maps %>%
   rowwise() %>%
   mutate(row_total = sum(c_across(-c(season_ID, trial)))) %>%
@@ -267,7 +268,7 @@ similarities_1to4 <- maps_norm %>%
   group_by(season_ID) %>%
   arrange(trial, .by_group = TRUE) %>% #need to turn maps_norm into matrix
   group_modify(~{
-    mat <- as.matrix(.x[,-c(1,2)]) #remove first 2 columns
+    mat <- as.matrix(.x[,-c(1,2)]) #remove first 2 columns because season_ID and trial stays
     if(nrow(mat) >= 4)
     sims <- sapply(1:(nrow(mat)-1), function(i){ 
       similarity_fun(mat[i, ], mat[i+1, ]) #compare the 3 pairs of trials
