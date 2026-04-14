@@ -437,7 +437,7 @@ palette10 <- colorRampPalette(c("#ffffcc", "#ffeda0", "#feb24c", "#fd8d3c", "#f0
 
 # Generate heatmaps
 plots <- lapply(names(heatmap_list), function(season) {
-  ggplot(heatmap_list[[season]], aes(x = x_bin, y = y_bin, fill = count)) +
+  ggplot(subset(heatmap_list[[season]], count<200), aes(x = x_bin, y = y_bin, fill = count)) +
     geom_tile(color = "grey80") +
     scale_fill_gradientn(colours = palette10) +
     scale_y_reverse() +
@@ -450,7 +450,7 @@ plots <- lapply(names(heatmap_list), function(season) {
     ) +
     theme_bw()
 })
-plots[[15]]
+plots[[20]]
 #Total plot per season
 ggplot(heatmap_data, aes(x = x_bin, y = y_bin, fill = count)) +
   geom_tile(color = "grey80") +
