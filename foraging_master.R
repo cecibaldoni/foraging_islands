@@ -281,15 +281,9 @@ similarities <- maps_norm %>%
       tibble()
     }  })
 
-similarities <- similarities %>%
+foraging_similarities <- similarities %>%
   separate(season_ID, into = c("season", "ID"), sep = "_", remove = FALSE)
 
-plot_data <- similarities %>%
-  pivot_longer(
-    cols = starts_with("sim_"),
-    names_to = "Comparison",
-    values_to = "similarity"
-  )
 #Save csv
 write.csv(foraging_similarities, here("csv/processed", "foraging_similarities.csv"),row.names = FALSE)
 
@@ -346,6 +340,7 @@ heatmap_data <- occupancy %>%
   group_by(season_ID, season, x_bin, y_bin) %>%
   summarise(count = sum(n), .groups = "drop") %>%
   mutate(x_bin = as.numeric(x_bin), y_bin = as.numeric(y_bin))
+
 # Split data by season_ID
 heatmap_list <- split(heatmap_data, heatmap_data$season_ID)
 
