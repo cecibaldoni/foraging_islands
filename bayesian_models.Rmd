@@ -164,7 +164,7 @@ pp_check(m_dist, ndraws = 100)
 
 ## Total moving time
 
-How much of the session did the animal spend moving? Gaussian family — the sqrt transformation your student used is not needed here because `brms` can handle the raw values, but check the `pp_check` to confirm the Gaussian assumption holds.
+How much of the session did the animal spend moving? Gaussian family — the sqrt transformation you used is not needed here because `brms` can handle the raw values, but check the `pp_check` to confirm the Gaussian assumption holds.
 
 ```{r m-move, cache=TRUE}
 m_move <- brm(moving_time ~ season + trial + (1 | season_ID),  data    = master,
@@ -181,7 +181,7 @@ pp_check(m_move, ndraws = 100)
 
 ## Total island visits
 
-How many times did the animal visit any island? This is a **count** — a non-negative integer. Rather than log-transforming it and using Gaussian (which is what your student did), we use a **negative binomial** family directly. This is more appropriate because:
+How many times did the animal visit any island? This is a **count** — a non-negative integer. Rather than log-transforming it and using Gaussian, we use a **negative binomial** family directly. This is more appropriate because:
 
 - Counts can't be negative, and a Gaussian model doesn't respect that
 - Count data often has more variance than a Poisson model assumes (overdispersion) — negative binomial handles this with a `shape` parameter
