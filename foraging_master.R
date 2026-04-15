@@ -261,24 +261,6 @@ maps_norm <- maps %>%
 similarity_fun <- function(a, b){
   1 - sum(abs(a - b)) / sum(a + b)}
 
-#Comparison of chronological trials T1S1vsT1S2, T1S2vsT2S1 and T2S1vsT2S2 then compute mean similarity and
-#sd to check how similarity changes across trials (high sd means stable pattern low sd mean unstable pattern).
-# similarities_1to4 <- maps_norm %>%
-#   group_by(season_ID) %>%
-#   arrange(trial, .by_group = TRUE) %>% #need to turn maps_norm into matrix
-#   group_modify(~{
-#     mat <- as.matrix(.x[,-c(1,2)]) #remove first 2 columns because season_ID and trial stays
-#     if(nrow(mat) >= 4)
-#     sims <- sapply(1:(nrow(mat)-1), function(i){ 
-#       similarity_fun(mat[i, ], mat[i+1, ]) #compare the 3 pairs of trials
-#     })
-#     else {
-#       sims <- NA_real_
-#     }
-#     tibble(mean_similarity = mean(sims),
-#            sd_similarity = sd(sims)) 
-#   })
-
 similarities <- maps_norm %>%
   group_by(season_ID) %>%
   arrange(trial, .by_group = TRUE) %>%
@@ -301,70 +283,6 @@ similarities <- maps_norm %>%
 
 similarities <- similarities %>%
   separate(season_ID, into = c("season", "ID"), sep = "_", remove = FALSE)
-# # Comparison of first trial (T1S1) vs last trial (T2S2) only
-# similarities_firstlast <- maps_norm %>%
-#   group_by(season_ID) %>%
-#   arrange(trial, .by_group = TRUE) %>%
-#   group_modify(~{
-#     mat <- as.matrix(.x[,-c(1,2)])
-#     if(nrow(mat) >= 4){
-#       sim <- similarity_fun(mat[1,], mat[4,])
-#     } else {
-#       sim <- NA_real_
-#     }
-#     tibble(mean_similarity = sim)
-#   })
-# 
-# #Comparison of trials in two different days T1S1vsT1S2 and T2S1vsT2S2
-# similarities_2days <- maps_norm %>%
-#   group_by(season_ID) %>%
-#   arrange(trial, .by_group = TRUE) %>%
-#   group_modify(~{
-#     mat <- as.matrix(.x[,-c(1,2)])
-#     idx <- seq(1, nrow(mat)-1, by = 2) #only 2 pair of trials 
-#     if(nrow(mat) >= 4)
-#     sims <- sapply(idx, function(i){
-#       similarity_fun(mat[i, ], mat[i+1, ])
-#     })
-#     else {
-#       sims <- NA_real_
-#     }
-#     tibble(mean_similarity = mean(sims, na.rm = TRUE), 
-#            sd_similarity = sd(sims, na.rm = TRUE))
-#   })
-# 
-# #Comparison of non consecutive trials: first trials of the day (T1S1vsT2S1 and T1S2vsT2S2)
-# similarities_noncons <- maps_norm %>%
-#   group_by(season_ID) %>%
-#   arrange(trial, .by_group = TRUE) %>%
-#   group_modify(~{
-#     mat <- as.matrix(.x[,-c(1,2)])
-#     sims <- c()
-#     if(nrow(mat) >= 3){
-#       sims <- c(sims, similarity_fun(mat[1,], mat[3,]))
-#     }
-#     if(nrow(mat) >= 4){
-#       sims <- c(sims, similarity_fun(mat[2,], mat[4,]))
-#     }
-#     else {
-#       sims <- NA_real_
-#     }
-#     tibble(mean_similarity = mean(sims, na.rm = TRUE), 
-#            sd_similarity = sd(sims))
-#   })
-# 
-# #Rename the columns(mean)
-# similarities_1to4 <- similarities_1to4 %>% rename(mean_sim_1to4 = mean_similarity, sd_1to4 = sd_similarity)
-# similarities_firstlast <- similarities_firstlast %>% rename(mean_firstlast = mean_similarity)
-# similarities_2days <- similarities_2days %>% rename(mean_sim_2days = mean_similarity, sd_2days = sd_similarity)
-# similarities_noncons <- similarities_noncons %>% rename(mean_sim_noncons = mean_similarity, sd_noncons = sd_similarity)
-# 
-# #Merge
-# foraging_similarities <- similarities_1to4 %>%
-#   left_join(similarities_firstlast, by = "season_ID") %>% 
-#   left_join(similarities_2days, by = "season_ID") %>%
-#   left_join(similarities_noncons, by = "season_ID") %>% 
-#   separate(season_ID, into = c("season", "ID"),sep = "_", remove = FALSE)
 
 plot_data <- similarities %>%
   pivot_longer(
@@ -432,9 +350,6 @@ heatmap_data <- occupancy %>%
 heatmap_list <- split(heatmap_data, heatmap_data$season_ID)
 
 #plot for each season_ID summed trials
-#color gradient from 5 colors
-palette10 <- colorRampPalette(c("#ffffcc", "#ffeda0", "#feb24c", "#fd8d3c", "#f03b20"))(10)
-
 # Generate heatmaps
 plots <- lapply(names(heatmap_list), function(season) {
   ggplot(subset(heatmap_list[[season]], count<200), aes(x = x_bin, y = y_bin, fill = count)) +
@@ -450,9 +365,9 @@ plots <- lapply(names(heatmap_list), function(season) {
     ) +
     theme_bw()
 })
-plots[[20]]
+plots[[8]]
 #Total plot per season
-ggplot(heatmap_data, aes(x = x_bin, y = y_bin, fill = count)) +
+ggplot(subset(heatmap_data, count<200), aes(x = x_bin, y = y_bin, fill = count)) +
   geom_tile(color = "grey80") +
   scale_fill_gradientn(colours = palette10)+
   coord_fixed() +
@@ -468,7 +383,7 @@ ggplot(heatmap_data, aes(x = x_bin, y = y_bin, fill = count)) +
   
 #Plot for similarities
 plot_seq <- plot_data %>%
-  filter(Comparison %in% c("sim_T1S1_T1S2", "sim_T1S2_T2S1", "sim_T2S1_T2S2"))
+  filter(Comparison %in% c("sim_T1S1_T2S1", "sim_T1S2_T2S2"))
 
 ggplot(plot_seq, aes(x = Comparison, y = similarity, color = season)) +
   geom_boxplot() +
@@ -476,35 +391,3 @@ ggplot(plot_seq, aes(x = Comparison, y = similarity, color = season)) +
   facet_wrap(~season) +
   theme_bw()
 
-plot_days <- plot_data %>%
-  filter(comparison %in% c("T1–T3", "T2–T4"))
-
-ggplot(plot_days, aes(x = comparison, y = similarity, color = season)) +
-  geom_boxplot() +
-  geom_jitter(width = 0.2, alpha = 0.6) +
-  facet_wrap(~season) +
-  theme_classic()
-
-plot_firstlast <- plot_data %>%
-  filter(comparison == "T1–T4")
-
-ggplot(plot_firstlast, aes(x = comparison, y = similarity, color = season)) +
-  geom_boxplot() +
-  geom_jitter(width = 0.2, alpha = 0.6) +
-  facet_wrap(~season) +
-  theme_classic()
-
-plot_same_day <- plot_data %>%
-  filter(comparison %in% c("T1–T2", "T3–T4"))
-
-ggplot(plot_same_day, aes(x = comparison, y = similarity, color = season)) +
-  geom_boxplot() +
-  geom_jitter(width = 0.2, alpha = 0.6) +
-  facet_wrap(~season) +
-  theme_classic()
-
-ggplot(plot_data, aes(x = Comparison, y = similarity, color = season)) +
-  geom_boxplot() +
-  geom_jitter(width = 0.2, alpha = 0.6) +
-  facet_wrap(~season) +
-  theme_bw()
