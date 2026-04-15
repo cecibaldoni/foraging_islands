@@ -158,6 +158,7 @@ m_dist <- brm(distance_rate ~ season + trial + (1 | season_ID),  data = master, 
 ```{r m-dist-check}
 summary(m_dist)
 pp_check(m_dist, ndraws = 100)
+plot(m_dist)
 ```
 
 ---
@@ -236,15 +237,15 @@ These models use spatial similarity scores as outcomes. Each similarity score is
 
 Mean similarity across consecutive trial pairs (T1S1↔T1S2, T1S2↔T2S1, T2S1↔T2S2). Captures how smoothly space use changes across the experiment.
 
-```{r m-sim1to4, cache=TRUE}
-m_sim1to4 <- brm(sim_1to4 ~ season, data = path,
+```{r m-sim1_4, cache=TRUE}
+m_sim1_4 <- brm(sim_T1S1_T2S2 ~ season, data = path,
                  family  = Beta(), prior = priors_beta[1:2, ],   # no sd prior needed (no random effect)
                  chains  = 4,  iter= 4000,warmup = 1000,cores = 4,  seed = 4321)
 ```
 
-```{r m-sim1to4-check}
-summary(m_sim1to4)
-pp_check(m_sim1to4, ndraws = 100)
+```{r m-sim1_4-check}
+summary(m_sim1_4)
+pp_check(m_sim1_4, ndraws = 100)
 ```
 
 ---
@@ -253,17 +254,28 @@ pp_check(m_sim1to4, ndraws = 100)
 
 Similarity between sessions on the same day (T1S1↔T1S2 and T2S1↔T2S2). High values mean the animal uses the same parts of the arena within a day.
 
-```{r m-sim2days, cache=TRUE}
-m_sim2days <- brm(sim_2days ~ season, data = path,
+```{r m-sim1_2, cache=TRUE}
+m_sim1_2 <- brm(sim_T1S1_T1S2 ~ season, data = path,
                   family  = Beta(),  prior = priors_beta[1:2, ],
                   chains  = 4,  iter= 4000,  warmup = 1000, cores = 4, seed = 4321)
 ```
 
-```{r m-sim2days-check}
-summary(m_sim2days)
-pp_check(m_sim2days, ndraws = 100)
+```{r m-sim1_2-check}
+summary(m_sim1_2)
+pp_check(m_sim1_2, ndraws = 100)
 ```
 
+
+```{r m-sim3_4, cache=TRUE}
+m_sim3_4 <- brm(sim_T2S1_T2S2 ~ season, data = path,
+                  family  = Beta(),  prior = priors_beta[1:2, ],
+                  chains  = 4,  iter= 4000,  warmup = 1000, cores = 4, seed = 4321)
+```
+
+```{r m-sim3_4-check}
+summary(m_sim3_4)
+pp_check(m_sim3_4, ndraws = 100)
+```
 ---
 
 ## Across-day same-session similarity (sim_noncons)

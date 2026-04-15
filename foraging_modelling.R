@@ -4,7 +4,11 @@ library(lmerTest)
 library(here)
 library(mgcv)
 library(tidyverse)
+library(brms)
+library(tidybayes)
+library(bayesplot)
 
+#Frequentist modelling ----
 master <- read.csv(here("csv/processed/foraging_master.csv"))
 path <- read.csv(here("csv/processed/foraging_similarities.csv"))
 efficiency <- read.csv(here("csv/processed/interactions_counts.csv"))
@@ -101,4 +105,7 @@ ggplot(edges, aes(x = trial, y = prop_time_edge))+
   facet_wrap (~ season)
 
 
-#Models for path consistency using "path"
+
+
+#Baysian modelling----
+
