@@ -81,11 +81,12 @@ We use weakly informative priors throughout. These are not strong assumptions �
 ```{r priors-lognormal}
 # For lognormal models (first island time, distance rate)
 priors_lognormal <- c(
-  prior(normal(0, 2), class = b),         # fixed effects (season, trial)
-  prior(normal(0, 3), class = Intercept), # overall mean (on log scale)
-  prior(exponential(1), class = sigma),   # residual SD
-  prior(exponential(1), class = sd)       # random effect SD
+  prior(normal(0, 0.5), class = b),
+  prior(normal(0, 1), class = Intercept),
+  prior(exponential(2), class = sigma),
+  prior(exponential(2), class = sd)
 )
+
 ```
 
 ```{r priors-gaussian}
@@ -151,7 +152,7 @@ Distance covered per second of moving time. This measures how fast and wide-rang
 
 ```{r m-dist, cache=TRUE}
 m_dist <- brm(distance_rate ~ season + trial + (1 | season_ID),  data = master,  family  = lognormal(),
-              prior = priors_lognormal,  
+              prior = priors_lognormal2,  
               chains  = 4,  iter = 4000,  warmup  = 1000,  cores = 4,  seed = 4321)
 ```
 
@@ -282,19 +283,40 @@ pp_check(m_sim3_4, ndraws = 100)
 
 Similarity between the same session type across days (T1S1↔T2S1 and T1S2↔T2S2). High values mean the animal is consistent in *when* it explores similar areas — a possible indicator of routine or memory.
 
-```{r m-simnoncons, cache=TRUE}
-m_simnoncons <- brm(sim_noncons ~ season,  data = path,
+```{r m-sim2_3, cache=TRUE}
+m_sim2_3 <- brm(sim_T1S2_T2S1 ~ season,  data = path,
                     family = Beta(),  prior = priors_beta[1:2, ],
                     chains = 4,  iter = 4000, warmup = 1000, cores = 4, seed = 4321)
 ```
 
-```{r m-simnoncons-check}
-summary(m_simnoncons)
-pp_check(m_simnoncons, ndraws = 100)
+```{r m-sim2_3-check}
+summary(m_sim2_3)
+pp_check(m_sim2_3, ndraws = 100)
 ```
 
+```{r m-sim1_3, cache=TRUE}
+m_sim1_3 <- brm(sim_T1S1_T2S1 ~ season, data = path,
+                 family  = Beta(), prior = priors_beta[1:2, ],   # no sd prior needed (no random effect)
+                 chains  = 4,  iter= 4000,warmup = 1000,cores = 4,  seed = 4321)
+```
 
-# Posterior visualisation
+```{r m-sim1_3-check}
+summary(m_sim1_3)
+pp_check(m_sim1_3, ndraws = 100)
+```
+
+```{r m-sim2_4, cache=TRUE}
+m_sim2_4 <- brm(sim_T1S2_T2S2 ~ season, data = path,
+                 family  = Beta(), prior = priors_beta[1:2, ],   # no sd prior needed (no random effect)
+                 chains  = 4,  iter= 4000,warmup = 1000,cores = 4,  seed = 4321)
+```
+
+```{r m-sim2_4-check}
+summary(m_sim2_4)
+pp_check(m_sim2_4, ndraws = 100)
+```
+
+ # Posterior visualisation
 
 Once all models are fit, you can extract and plot the posterior distributions of the fixed effects. Here's a general template that works for any of the models above:
 
