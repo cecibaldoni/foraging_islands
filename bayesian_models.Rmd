@@ -81,10 +81,10 @@ We use weakly informative priors throughout. These are not strong assumptions �
 ```{r priors-lognormal}
 # For lognormal models (first island time, distance rate)
 priors_lognormal <- c(
-  prior(normal(0, 0.5), class = b),
-  prior(normal(0, 1), class = Intercept),
-  prior(exponential(2), class = sigma),
-  prior(exponential(2), class = sd)
+  prior(normal(0, 2), class = b),
+  prior(normal(0, 3), class = Intercept),
+  prior(exponential(1), class = sigma),
+  prior(exponential(1), class = sd)
 )
 
 ```
@@ -114,8 +114,7 @@ priors_negbinom <- c(
 priors_beta <- c(
   prior(normal(0, 2), class = b),
   prior(normal(0, 2), class = Intercept),
-  prior(exponential(1), class = sd),
-  prior(exponential(1), class = phi)    # precision parameter (higher = less spread)
+  prior(gamma(2, 0.1), class = phi)
 )
 ```
 
@@ -152,13 +151,13 @@ Distance covered per second of moving time. This measures how fast and wide-rang
 
 ```{r m-dist, cache=TRUE}
 m_dist <- brm(distance_rate ~ season + trial + (1 | season_ID),  data = master,  family  = lognormal(),
-              prior = priors_lognormal2,  
+              prior = priors_lognormal,  
               chains  = 4,  iter = 4000,  warmup  = 1000,  cores = 4,  seed = 4321)
 ```
 
 ```{r m-dist-check}
 summary(m_dist)
-pp_check(m_dist, ndraws = 100)
+pp_check(m_dist, ndraws = 2000)
 plot(m_dist)
 ```
 
@@ -168,6 +167,20 @@ plot(m_dist)
 
 How much of the session did the animal spend moving? Gaussian family — the sqrt transformation you used is not needed here because `brms` can handle the raw values, but check the `pp_check` to confirm the Gaussian assumption holds.
 
+With the gaussian family is not really fitting so I tried a lognormal distribution and priors. It looks better with that.
+```{r priors-lognormal2}
+priors_lognormal2 <- c(
+  prior(normal(0, 2), class = b),
+  prior(normal(6, 2), class = Intercept),  # log-scale
+  prior(exponential(1), class = sigma),
+  prior(exponential(1), class = sd)
+)
+```
+
+```{r m-move, cache=TRUE} 
+m_move <- brm(moving_time ~ season + trial + (1 | season_ID), data    = master, family  = lognormal(), prior   = priors_lognormal2, chains  = 4, iter    = 4000, warmup  = 1000, cores   = 4, seed    = 4321)
+```
+
 ```{r m-move, cache=TRUE}
 m_move <- brm(moving_time ~ season + trial + (1 | season_ID),  data    = master,
               family = gaussian(), prior = priors_gaussian,
@@ -176,8 +189,10 @@ m_move <- brm(moving_time ~ season + trial + (1 | season_ID),  data    = master,
 
 ```{r m-move-check}
 summary(m_move)
-pp_check(m_move, ndraws = 100)
+pp_check(m_move, ndraws = 1000)
+plot(m_move)
 ```
+
 
 ---
 
@@ -196,7 +211,7 @@ m_visit <- brm(tot_visit ~ season + trial + (1 | season_ID), data = master,
 
 ```{r m-visit-check}
 summary(m_visit)
-pp_check(m_visit, ndraws = 100)
+pp_check(m_visit, ndraws = 1000)
 ```
 
 ---
@@ -223,7 +238,7 @@ m_edge <- brm(prop_time_edge ~ season + trial + (1 | season_ID),  data = edges,
 
 ```{r m-edge-check}
 summary(m_edge)
-pp_check(m_edge, ndraws = 100)
+pp_check(m_edge, ndraws = 1000)
 ```
 
 ---
@@ -239,14 +254,13 @@ These models use spatial similarity scores as outcomes. Each similarity score is
 Mean similarity across consecutive trial pairs (T1S1↔T1S2, T1S2↔T2S1, T2S1↔T2S2). Captures how smoothly space use changes across the experiment.
 
 ```{r m-sim1_4, cache=TRUE}
-m_sim1_4 <- brm(sim_T1S1_T2S2 ~ season, data = path,
-                 family  = Beta(), prior = priors_beta[1:2, ],   # no sd prior needed (no random effect)
-                 chains  = 4,  iter= 4000,warmup = 1000,cores = 4,  seed = 4321)
+m_sim1_4 <- brm(sim_T1S1_T2S2 ~ season, data   = path, family  = Beta(),  prior = priors_beta[1:2, ],
+                  chains  = 4,  iter= 4000,  warmup = 1000, cores = 4, seed = 4321)
 ```
 
 ```{r m-sim1_4-check}
 summary(m_sim1_4)
-pp_check(m_sim1_4, ndraws = 100)
+pp_check(m_sim1_4, ndraws = 1000)
 ```
 
 ---
@@ -263,7 +277,7 @@ m_sim1_2 <- brm(sim_T1S1_T1S2 ~ season, data = path,
 
 ```{r m-sim1_2-check}
 summary(m_sim1_2)
-pp_check(m_sim1_2, ndraws = 100)
+pp_check(m_sim1_2, ndraws = 1000)
 ```
 
 
@@ -275,7 +289,7 @@ m_sim3_4 <- brm(sim_T2S1_T2S2 ~ season, data = path,
 
 ```{r m-sim3_4-check}
 summary(m_sim3_4)
-pp_check(m_sim3_4, ndraws = 100)
+pp_check(m_sim3_4, ndraws = 1000)
 ```
 ---
 
@@ -291,7 +305,7 @@ m_sim2_3 <- brm(sim_T1S2_T2S1 ~ season,  data = path,
 
 ```{r m-sim2_3-check}
 summary(m_sim2_3)
-pp_check(m_sim2_3, ndraws = 100)
+pp_check(m_sim2_3, ndraws = 1000)
 ```
 
 ```{r m-sim1_3, cache=TRUE}
@@ -302,7 +316,7 @@ m_sim1_3 <- brm(sim_T1S1_T2S1 ~ season, data = path,
 
 ```{r m-sim1_3-check}
 summary(m_sim1_3)
-pp_check(m_sim1_3, ndraws = 100)
+pp_check(m_sim1_3, ndraws = 1000)
 ```
 
 ```{r m-sim2_4, cache=TRUE}
@@ -313,7 +327,7 @@ m_sim2_4 <- brm(sim_T1S2_T2S2 ~ season, data = path,
 
 ```{r m-sim2_4-check}
 summary(m_sim2_4)
-pp_check(m_sim2_4, ndraws = 100)
+pp_check(m_sim2_4, ndraws = 1000)
 ```
 
  # Posterior visualisation
