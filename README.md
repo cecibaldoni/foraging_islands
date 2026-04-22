@@ -35,6 +35,11 @@ Afterwards, each video has been visually analysed to assess the effective visit 
 
 1.  `foraging_results.R` enable to clean and tidy the data. Afterwards it merges the tracking data from Trex and the island visit data manually recorded. Finally, some plots to visually assert the result and some checks on the structure of the df.
 2.  `foraging_master.R` enable to calculate the variables that will be used for the modelling. Three csv are produced by this code:
-    -   interactions_count contains the number of interactions with the door of every islands for each shrew. Moreover, a success rate is calculated based on the number of doors visited.
+    -   interactions_count contains the number of interactions with the door of every islands for each shrew.
+        Moreover, a success rate is calculated based on the number of doors visited.
+
     -   foraging_master contains all the information that will be implemented in the models for exploration tendencies and path patterns similarities.
-    -   foraging_similarities contains the path similarities for each individual among the 4 trials (sim_1to4), trials on the same day (sim_2days) and on the first trials of the day (sim_noncons)
+
+    -   foraging_similarities contains the path similarities for each individual among the 4 trials.
+3.  `foraging_edges.R` enable to get data about the areas occupied by the animal during the experiment. More specifically it gives the time spent on the edge of the arena.
+4.  `foraging_modelling.R` enable to use the data produced in the previous codes and create statistical valuable results.
