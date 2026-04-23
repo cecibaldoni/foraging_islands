@@ -42,4 +42,24 @@ Afterwards, each video has been visually analysed to assess the effective visit 
 
     -   foraging_similarities contains the path similarities for each individual among the 4 trials.
 3.  `foraging_edges.R` enable to get data about the areas occupied by the animal during the experiment. More specifically it gives the time spent on the edge of the arena.
-4.  `foraging_modelling.R` enable to use the data produced in the previous codes and create statistical valuable results.
+4.  `foraging_modelling.R` enable to use the data produced in the previous codes and create statistical valuable results. FREQUENTIST STATISTIC ONLY
+5.  `bayesian_models.Rmd` enable to use the data produced in the previous codes and create statistical valuable results. BAYESIAN STATISTIC ONLY
+
+## Steps to make everything work
+
+1.  Run `foraging_results.R` in order to get the file: `foraging_result.csv`.
+
+    -   `foraging_result.csv` contains tracking data, including the data regarding the island visited. `foraging_result.csv` is often indicated as `result` in the scripts.
+
+2.  Run `foraging_master.R` in order to get the files: `foraging_master.csv`, `foraging_similarities.csv`, `interactions_counts.csv`.
+
+    -   `foraging_master.csv` contains data about explorative features.
+    -   `foraging_similarities.csv` contains data about the space usage similarities among trials.
+    -   `interactions_counts.csv` contains data about efficiency rate (no models on this).
+
+3.  Run `foraging_edges` in order to get the file: `foraging_edges_new.csv`.
+    To run this script you need additional `foraging_corners.csv`, `islands.csv`.
+
+    -   `foraging_edges_new.csv` contains data about time spent on the edges of the arena.
+
+4.  Run `bayesian_models.Rmd` to perform the models and to investigate the statistical results.
