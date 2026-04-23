@@ -378,7 +378,7 @@ ggplot(subset(heatmap_data, count<200), aes(x = x_bin, y = y_bin, fill = count))
   
 #Plot for similarities
 plot_seq <- plot_data %>%
-  filter(Comparison %in% c("sim_T1S1_T2S1", "sim_T1S2_T2S2"))
+  filter(Comparison %in% c("sim_T1S1_T2S1"))
 
 ggplot(plot_seq, aes(x = Comparison, y = similarity, color = season)) +
   geom_boxplot() +
@@ -386,3 +386,5 @@ ggplot(plot_seq, aes(x = Comparison, y = similarity, color = season)) +
   facet_wrap(~season) +
   theme_bw()
 
+ggplot(plot_seq, aes(x = Comparison, fill = season)) + 
+  geom_density() + facet_wrap(~season)

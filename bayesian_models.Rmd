@@ -261,6 +261,7 @@ m_sim1_4 <- brm(sim_T1S1_T2S2 ~ season, data   = path, family  = Beta(),  prior 
 ```{r m-sim1_4-check}
 summary(m_sim1_4)
 pp_check(m_sim1_4, ndraws = 1000)
+pp_check(m_sim1_4, type = "dens_overlay_grouped", group = "season", ndraws = 500)
 ```
 
 ---
@@ -269,15 +270,28 @@ pp_check(m_sim1_4, ndraws = 1000)
 
 Similarity between sessions on the same day (T1S1↔T1S2 and T2S1↔T2S2). High values mean the animal uses the same parts of the arena within a day.
 
+```{r priors-beta}
+# For Beta models (proportions and similarities)
+priors_beta2 <- c(
+  prior(normal(0, 2), class = b),
+  prior(normal(0, 2), class = Intercept),
+  prior(gamma(4, 1), class = phi)
+)
+
+plogis(rnorm(10000, 0,2)) |> hist()
+
+```
+
 ```{r m-sim1_2, cache=TRUE}
 m_sim1_2 <- brm(sim_T1S1_T1S2 ~ season, data = path,
-                  family  = Beta(),  prior = priors_beta[1:2, ],
+                  family  = Beta(),  prior = priors_beta2,
                   chains  = 4,  iter= 4000,  warmup = 1000, cores = 4, seed = 4321)
 ```
 
 ```{r m-sim1_2-check}
 summary(m_sim1_2)
 pp_check(m_sim1_2, ndraws = 1000)
+pp_check(m_sim1_2, type = "dens_overlay_grouped", group = "season", ndraws = 500)
 ```
 
 
@@ -306,6 +320,7 @@ m_sim2_3 <- brm(sim_T1S2_T2S1 ~ season,  data = path,
 ```{r m-sim2_3-check}
 summary(m_sim2_3)
 pp_check(m_sim2_3, ndraws = 1000)
+pp_check(m_sim2_3, type = "dens_overlay_grouped", group = "season", ndraws = 1000)
 ```
 
 ```{r m-sim1_3, cache=TRUE}
@@ -317,6 +332,8 @@ m_sim1_3 <- brm(sim_T1S1_T2S1 ~ season, data = path,
 ```{r m-sim1_3-check}
 summary(m_sim1_3)
 pp_check(m_sim1_3, ndraws = 1000)
+pp_check(m_sim1_3, type = "dens_overlay_grouped", group = "season", ndraws = 500)
+
 ```
 
 ```{r m-sim2_4, cache=TRUE}
@@ -367,6 +384,10 @@ pp_check(m_istime, ndraws = 100)
 
 If R-hat values are above 1.01 or chains don't mix, try increasing `iter` or `warmup`, or reconsider the prior on the problematic parameter.
 
+install package loo
+m_sim1_2 <- add_criterion(m_sim1_2, "loo")
+m_sim1_2_MODELLO2 <- add_criterion(m_sim1_2_MODELLO2, "loo")
+loo_compare(m_sim1_2, m_sim1_2_MODELLO2)
 ---
 
 # Session info
