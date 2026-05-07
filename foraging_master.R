@@ -111,6 +111,66 @@ b <- ggplot(position_counts, aes(x = efficiency_rate)) +
 a
 b
 
+# Read data
+df <- read.csv(here("csv/processed", "interactions_counts.csv",
+               stringsAsFactors = FALSE))
+
+# Check column names
+names(df)
+
+# Select all door columns manually
+door_cols <- c(
+  "A_1","A_2","A_3","A_4","A_5","A_6",
+  "B_1","B_2","B_3","B_4","B_5","B_6",
+  "C_1","C_2","C_3","C_4","C_5","C_6",
+  "D_1","D_2","D_3","D_4","D_5","D_6"
+)
+
+# Convert from wide to long format
+df_long <- pivot_longer(
+  data = df,
+  cols = all_of(door_cols),
+  names_to = "door",
+  values_to = "count"
+)
+
+# Remove NA values
+df_long <- na.omit(df_long)
+
+# Convert variables to factors
+df_long$trial <- factor(df_long$trial)
+df_long$season <- factor(df_long$season)
+df_long$ID <- factor(df_long$ID)
+
+# Plot
+plot_list <- lapply(unique(df_long$ID), function(i) {
+  
+  ggplot(filter(df_long, ID == i),
+         aes(x = door,
+             y = count,
+             fill = season)) +
+    
+    geom_col(position = "dodge") +
+    
+    facet_wrap(~ trial) +
+    
+    theme_bw() +
+    
+    theme(
+      axis.text.x = element_text(angle = 90, hjust = 1)
+    ) +
+    
+    labs(
+      title = paste("ID:", i),
+      x = "Door",
+      y = "Raw count"
+    )
+})
+
+# Name the list
+names(plot_list) <- unique(df_long$ID)
+plot_list[[6]]
+
 # Master df -----
 foraging_master <- result %>%
   distinct(unique_trial_ID) %>%
@@ -388,3 +448,4 @@ ggplot(plot_seq, aes(x = Comparison, y = similarity, color = season)) +
 
 ggplot(plot_seq, aes(x = Comparison, fill = season)) + 
   geom_density() + facet_wrap(~season)
+
