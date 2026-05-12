@@ -56,14 +56,18 @@ Here is a summary of all models we'll fit:
 
 | Model | Outcome | Data | Family | Random effect |
 |---|---|---|---|---|
-| `m_istime` | Time to first island | `master` | Lognormal | `(1 \| season_ID)` |
-| `m_dist` | Distance rate (cm/s) | `master` | Lognormal | `(1 \| season_ID)` |
-| `m_move` | Total moving time | `master` | Gaussian | `(1 \| season_ID)` |
-| `m_visit` | Total island visits | `master` | Negative binomial | `(1 \| season_ID)` |
-| `m_edge` | Proportion time at edge | `edges` | Beta | `(1 \| season_ID)` |
-| `m_sim1to4` | Spatial similarity (consecutive) | `path` | Beta | none |
-| `m_sim2days` | Spatial similarity (within-day) | `path` | Beta | none |
-| `m_simnoncons` | Spatial similarity (across-day) | `path` | Beta | none |
+| `m_istime` | Time to first island | `master` | Lognormal | `(1\season_ID)` |
+| `m_dist` | Distance rate (cm/s) | `master` | Lognormal | `(1\season_ID)` |
+| `m_move` | Total moving time | `master` | Gaussian | `(1\season_ID)` |
+| `m_visit` | Total island visits | `master` | Negative binomial | `(1\season_ID)` |
+| `m_edge` | Proportion time at edge | `edges` | Beta | `(1\season_ID)` |
+| `m_sim1_4` | Spatial similarity across trial 1_4 | `path` | Beta | none |
+| `m_sim1_2` | Spatial similarity across trial 1_2 | `path` | Beta | none |
+| `m_sim3_4` | Spatial similarity across trial 3_4 | `path` | Beta | none |
+| `m_sim2_3` | Spatial similarity across trial 2_3 | `path` | Beta | none |
+| `m_sim1_3` | Spatial similarity across trial 1_3 | `path` | Beta | none |
+| `m_sim2_4` | Spatial similarity across trial 2_4 | `path` | Beta | none |
+
 
 A note on the random effect `(1 | season_ID)`: this is the individual animal ID (nested within season). It accounts for the fact that the same individual contributes multiple trials — without this, the model would treat each row as independent, which would underestimate uncertainty and inflate false positives.
 

@@ -160,3 +160,7 @@ ggplot(pred, aes(x = x, y = predicted, color = group, group = group)) +
     y = "Predicted number of visits",
     color = "Season",
     title = "Predicted visitation across trials and seasons")
+
+ggplot(master, aes(x = trial, y = tot_visit, colour = season)) +
+  geom_point(size = 3) +
+  theme_classic() 
