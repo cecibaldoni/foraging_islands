@@ -448,4 +448,3 @@ ggplot(plot_seq, aes(x = Comparison, y = similarity, color = season)) +
 
 ggplot(plot_seq, aes(x = Comparison, fill = season)) + 
   geom_density() + facet_wrap(~season)
-
