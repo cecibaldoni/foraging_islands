@@ -38,7 +38,7 @@ edges       <- read.csv(here("csv/foraging_edges_new.csv"))
 
 edges <- edges %>%
   mutate(season_ID = paste(season, ID, sep = "_")) %>%
-  mutate(prop_time_center = time_center / time_total)
+  mutate(time_edge = time_edge / 1000)
 ```
 
 ```{r factor-setup}
@@ -246,8 +246,8 @@ range(edges$prop_time_edge, na.rm = TRUE)
 ```
 
 ```{r m-edge, cache=TRUE}
-m_edge <- brm(prop_time_edge ~ season + trial + (1 | season_ID),  data = edges,
-              family  = Beta(), prior = priors_beta, 
+m_edge <- brm(time_edge ~ season + trial + (1 | season_ID), data = subset(edges, time_edge < 30000),
+              family  = lognormal(), prior = priors_lognormal, 
               chains  = 4, iter= 4000, warmup = 1000, cores = 4, seed = 4321)
 ```
 
@@ -260,87 +260,54 @@ pp_check(m_edge, ndraws = 1000)
 ```{r plots}
 # Helper: return posterior draws
 get_season_predictions <- function(model, outcome_label) {
-
-  newdata <- expand.grid(
+newdata <- expand.grid(
     season = c("spring", "summer", "winter"),
-    trial  = c("T1S1","T1S2","T2S1","T2S2")
-  )
+    trial  = c("T1S1","T1S2","T2S1","T2S2"))
 
   model %>%
-    epred_draws(
-      newdata = newdata,
-      re_formula = NA
-    ) %>%
-    mutate(outcome = outcome_label)
-}
+    epred_draws(newdata = newdata,re_formula = NA) %>%
+    mutate(outcome = outcome_label)}
 
 # Combine posterior draws
 df_preds <- bind_rows(
-  get_season_predictions(m_istime, "Time to first island"),
-  get_season_predictions(m_dist,   "Walking speed"),
-  get_season_predictions(m_move,   "Time spent moving"),
-  get_season_predictions(m_visit,  "Visits per island")
-) %>%
-  mutate(
-    season = factor(
-      season,
-      levels = c("winter", "summer", "spring")
-    ),
-    outcome = factor(
-      outcome,
+  get_season_predictions(m_istime, "Time to first island (s)"),
+  get_season_predictions(m_dist,   "Average speed (cm/s)"),
+  get_season_predictions(m_move,   "Time spent moving (s)"),
+  get_season_predictions(m_visit,  "Total visits (n)"), 
+  get_season_predictions(m_edge, "Time at the edges (s)")) %>%
+  mutate(season = factor(season,levels = c("spring", "winter", "summer")),outcome = factor(outcome,
       levels = c(
-        "Time to first island",
-        "Time spent moving",
-        "Walking speed",
-        "Visits per island"
-      )
-    )
-  )
+        "Time to first island (s)",
+        "Time spent moving (s)",
+        "Average speed (cm/s)",
+        "Total visits (n)",
+        "Time at the edges (s)")))
 
-ggplot(df_preds,
-       aes(x = .epred,
-           y = season,
-           fill = season)) +
+ggplot(df_preds,aes(x = .epred,y = season,fill = season)) +
+  
+  stat_halfeye(.width = c(0.66, 0.95), point_interval = median_qi, alpha = 0.8, normalize = "xy") +
+  
+  facet_wrap(~ outcome, scales = "free_x", ncol = 2) +
 
-  stat_halfeye(
-    .width = c(0.66, 0.95),
-    point_interval = median_qi,
-    alpha = 0.8,
-    normalize = "xy"
-  ) +
-
-  facet_wrap(
-    ~ outcome,
-    scales = "free_x",
-    ncol = 2
-  ) +
-
-  scale_fill_manual(
-    values = c(
+  scale_fill_manual(values = c(
       winter = "#5B8DB8",
       summer = "#E8A838",
-      spring = "#6BAF6B"
-    )
-  ) +
+      spring = "#6BAF6B")) +
 
-  labs(
-    x = "Predicted value",
-    y = NULL,
-    title = "Seasonal differences in foraging experiment"
-  ) +
+  labs(x = "Predicted value", y = NULL,) +
 
   theme_bw() +
 
-  theme(
-    legend.position = "none",
-    strip.text = element_text(size = 10, face = "bold")
-  )
+  theme(legend.position = "none", strip.text = element_text(size = 10, face = "bold"))
+
 # Helper to extract trial predictions from any model
 get_trial_predictions <- function(model, outcome_label) {
-  newdata <- expand.grid (season = c("summer","winter","spring"), trial  = c("T1S1","T1S2","T2S1","T2S2"))
+  newdata <- expand.grid (
+    season = c("summer","winter","spring"), 
+    trial  = c("T1S1","T1S2","T2S1","T2S2"))
   
   model %>%
-    epred_draws(newdata    = newdata, re_formula = NA) %>%
+    epred_draws(newdata = newdata, re_formula = NA) %>%
     group_by(season, trial) %>%
     median_qi(.epred, .width = c(0.66, 0.95)) %>%
     mutate(outcome = outcome_label)
@@ -348,15 +315,20 @@ get_trial_predictions <- function(model, outcome_label) {
 
 # Run for each of your models
 df_trials <- bind_rows(
-  get_trial_predictions(m_istime,   "Time to first island"),
-  get_trial_predictions(m_move, "Time spent moving"),
-  get_trial_predictions(m_dist,    "Walking speed"),
-  get_trial_predictions(m_visit,   "Visits per island")
+  get_trial_predictions(m_istime, "Time to first island (s)"),
+  get_trial_predictions(m_move, "Time spent moving (s)"),
+  get_trial_predictions(m_dist, "Average speed (cm/s)"),
+  get_trial_predictions(m_visit, "Total visits (n)"),
+  get_trial_predictions(m_edge, "Time at the edges (s)")
 ) %>%
   mutate(season  = factor(season, levels = c("summer","winter","spring")),
     trial   = factor(trial, levels = c("T1S1","T1S2","T2S1","T2S2")),
     outcome = factor(outcome,
-                     levels = c("Time to first island","Time spent moving", "Walking speed", "Visits per island")))
+                     levels = c("Time to first island (s)",
+                                "Time spent moving (s)", 
+                                "Average speed (cm/s)", 
+                                "Total visits (n)",
+                                "Time at the edges (s)")))
 
 ggplot(df_trials, aes(x = trial, y = .epred, color = season, group = season)) +
   # 95% CI ribbon
@@ -379,14 +351,106 @@ ggplot(df_trials, aes(x = trial, y = .epred, color = season, group = season)) +
     x        = "Trial",
     y        = "Predicted value",
     color    = "Season",
-    fill     = "Season",
-    title    = "Foraging traits across trials and seasons") +
-  
+    fill     = "Season") +
   theme_bw() +
   theme(
     legend.position = "bottom",
     strip.text      = element_text(size = 10, face = "bold"),
     axis.text.x     = element_text(angle = 30, hjust = 1)
+  )
+
+
+get_similarity_predictions <- function(model, comparison_label){
+  newdata <- expand.grid(
+    season = c("summer","winter","spring"))
+
+  model %>%
+    epred_draws(newdata = newdata, re_formula = NA) %>%
+    group_by(season) %>%
+    median_qi(.epred, .width = c(0.66, 0.95)) %>%
+    mutate(comparison = comparison_label)
+}
+
+df_sim <- bind_rows(
+  get_similarity_predictions(
+    m_sim1_2,
+    "Similarity T1S1–T1S2"
+  ),
+  get_similarity_predictions(
+    m_sim2_3,
+    "Similarity T1S2–T2S1"
+  )
+) %>%
+  mutate(
+    season = factor(
+      season,
+      levels = c("summer","winter","spring")
+    ),
+    comparison = factor(
+      comparison,
+      levels = c(
+        "Similarity T1S1–T1S2",
+        "Similarity T1S2–T2S1"
+      )
+    )
+  )
+
+ggplot(
+  df_sim,
+  aes(
+    x = season,
+    y = .epred,
+    color = season
+  )
+) +
+
+  geom_errorbar(
+    aes(
+      ymin = .lower,
+      ymax = .upper
+    ),
+    width = 0.15,
+    alpha = 0.4
+  ) +
+
+  geom_errorbar(
+    data = filter(df_sim, .width == 0.66),
+    aes(
+      ymin = .lower,
+      ymax = .upper
+    ),
+    width = 0.25,
+    linewidth = 1.2
+  ) +
+
+  geom_point(size = 3) +
+
+  facet_wrap(
+    ~ comparison,
+    scales = "free_y"
+  ) +
+
+  scale_color_manual(
+    values = c(
+      summer = "#E8A838",
+      winter = "#5B8DB8",
+      spring = "#6BAF6B"
+    )
+  ) +
+
+  labs(
+    x = "Season",
+    y = "Predicted similarity"
+  ) +
+
+  theme_bw() +
+
+  theme(
+    legend.position = "none",
+    strip.text = element_text(
+      size = 10,
+      face = "bold"
+    )
   )
 ```
 # Models from `path`
@@ -617,7 +681,7 @@ contrast <- draws %>%
   ungroup() %>%
   select(season, visited_prev, .draw, .epred) %>%
   pivot_wider(names_from  = visited_prev, values_from = .epred, names_prefix = "prev_") %>%
-  mutate(contrast = prev_1 - prev_0, season = factor(season, levels = c("winter","summer","spring")))
+  mutate(contrast = prev_1 - prev_0, season = factor(season, levels = c("spring", "winter","summer")))
 
 ggplot(contrast, aes(x = contrast, y = season, fill = season)) +
   
@@ -633,8 +697,7 @@ ggplot(contrast, aes(x = contrast, y = season, fill = season)) +
                spring = "#6BAF6B")) +
   
   labs(x = "P(revisit | visited before) − P(revisit | not visited before)", y = NULL,
-    title = "Does prior visitation predict revisitation?",
-    subtitle = "Positive = animal returns to previously visited doors\nVertical dashed line = no effect") +
+    subtitle = "Positive = shrew returns to previously visited doors\nVertical dashed line = no effect") +
   
   theme_bw()
 ```
@@ -715,7 +778,7 @@ Once all models are fit, you can extract and plot the posterior distributions of
 
 ```{r posterior-plot-example, eval=FALSE}
 # Replace m_istime with any model name
-m_istime %>%
+m_sim2_3 %>%
   gather_draws(`b_.*`, regex = TRUE) %>%
   filter(.variable != "b_Intercept") %>%
   ggplot(aes(x = .value, y = .variable)) +

@@ -422,13 +422,12 @@ plots <- lapply(names(heatmap_list), function(season) {
 })
 plots[[8]]
 #Total plot per season
-ggplot(subset(heatmap_data, count<200), aes(x = x_bin, y = y_bin, fill = count)) +
+ggplot(subset(heatmap_data, count<400), aes(x = x_bin, y = y_bin, fill = count)) +
   geom_tile(color = "grey80") +
   scale_fill_gradientn(colours = palette10)+
   coord_fixed() +
   scale_y_reverse() +
   labs(
-    title = "Animal movement heatmap by season",
     x = "X grid",
     y = "Y grid",
     fill = "Pass count"
