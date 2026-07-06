@@ -257,7 +257,7 @@ pp_check(m_edge, ndraws = 1000)
 ```
 
 ---
-```{r plots}
+```{r plots (predictions)}
 # Helper: return posterior draws
 get_season_predictions <- function(model, outcome_label) {
 newdata <- expand.grid(
@@ -453,6 +453,81 @@ ggplot(
     )
   )
 ```
+
+```{r plots (models)}
+get_season_contrast_coef <- function(model, outcome_label) {
+  model %>%
+    spread_draws(b_seasonwinter,
+                 b_seasonspring) %>%
+    rename(
+      `Winter vs Summer` = b_seasonwinter,
+      `Spring vs Summer` = b_seasonspring
+    ) %>%
+    pivot_longer(
+      cols      = c(`Winter vs Summer`, `Spring vs Summer`),
+      names_to  = "contrast",
+      values_to = "coefficient"
+    ) %>%
+    mutate(outcome = outcome_label)
+}
+
+df_contrasts <- bind_rows(
+  get_season_contrast_coef(m_istime, "Time to first island"),
+  get_season_contrast_coef(m_move,   "Time spent moving"),
+  get_season_contrast_coef(m_dist,   "Average speed"),
+  get_season_contrast_coef(m_visit,  "Total visits"),
+  get_season_contrast_coef(m_edge,   "Time at edges")
+) %>%
+  mutate(
+    contrast = factor(contrast,
+                      levels = c("Winter vs Summer",
+                                 "Spring vs Summer")),
+    outcome  = factor(outcome, levels = c(
+      "Time to first island",
+      "Time spent moving",
+      "Average speed",
+      "Total visits",
+      "Time at edges"
+    ))
+  )
+
+ggplot(df_contrasts,
+       aes(x = coefficient, y = contrast, fill = contrast)) +
+  
+  stat_halfeye(
+    .width         = c(0.66, 0.95),
+    point_interval = median_qi,
+    alpha          = 0.85,
+    normalize      = "xy"
+  ) +
+  
+  geom_vline(xintercept = 0,
+             linetype   = "dashed",
+             color      = "grey40",
+             linewidth  = 0.6) +
+  
+  facet_wrap(~ outcome, scales = "free_x", ncol = 2) +
+  
+  scale_fill_manual(values = c(
+    "Winter vs Summer" = "#5B8DB8",
+    "Spring vs Summer" = "#6BAF6B"
+  )) +
+  
+  labs(
+    x        = "Posterior coefficient (model scale)",
+    y        = NULL,
+    title    = "Seasonal differences in foraging behaviour",
+    subtitle = "Left of zero = less than summer · Right of zero = more than summer"
+  ) +
+  
+  theme_bw() +
+  theme(
+    legend.position = "none",
+    strip.text      = element_text(size = 10, face = "bold")
+  )
+```
+
+
 # Models from `path`
 
 These models use spatial similarity scores as outcomes. Each similarity score is a Bray-Curtis coefficient (0 = no overlap, 1 = identical space use) computed per individual across trials. Because `path` has one row per individual (30 rows), there is no repeated measures structure and no random effect needed.
@@ -638,10 +713,54 @@ m_revisit <- brm(visited_next ~ visited_prev * season + (1 | season_ID) + (1 | d
 ```{r m-revisit-check}
 summary(m_revisit)
 pp_check(m_revisit, ndraws = 1000)
+
+```
+
+```{r m-revisit-plot (model)}
+# Extract posterior draws for the visited_prev effect, broken down by season
+# This pulls the actual fitted coefficients, not predicted probabilities
+
+draws_coef <- m_revisit %>%
+  spread_draws(b_visited_prev,
+               `b_visited_prev:seasonwinter`,
+               `b_visited_prev:seasonspring`) %>%
+  mutate(
+    summer = b_visited_prev,                                    # reference level
+    winter = b_visited_prev + `b_visited_prev:seasonwinter`,  # add main effect
+    spring = b_visited_prev + `b_visited_prev:seasonspring`
+  ) %>%
+  select(.draw, summer, winter, spring) %>%
+  pivot_longer(cols      = c(summer, winter, spring),
+               names_to  = "season",
+               values_to = "effect") %>%
+  mutate(season = factor(season, levels = c("spring","winter","summer")))
+
+ggplot(draws_coef,
+       aes(x = effect, y = season, fill = season)) +
+  
+  stat_halfeye(
+    .width         = c(0.66, 0.95),
+    point_interval = median_qi,
+    alpha          = 0.85,
+    normalize      = "xy"
+  ) +
+  
+  geom_vline(xintercept = 0,
+             linetype   = "dashed",
+             color      = "grey40") +
+  
+  scale_fill_manual(values = c(
+    summer = "#E8A838",
+    winter = "#5B8DB8",
+    spring = "#6BAF6B"
+  )) +
+  
+  theme_bw() +
+  theme(legend.position = "none")
 ```
 
 ```{r m-revisit-pair, cache=TRUE}
-m_revisit_pair <- brm(visited_next ~ visited_prev * season * pair + (1 | season_ID) + (1 | door), data   = df_pairs,
+m_revisit_pair <- brm(visited_next ~ visited_prev * season * pair + (1 | season_ID) + (1 | door), data = df_pairs,
                  family = bernoulli(link = "logit"), prior = priors_bernoulli,
                  chains = 4, iter   = 4000, warmup = 1000, cores  = 4, seed   = 42)
 ```
@@ -669,7 +788,7 @@ summary(m_revisit_island)
 pp_check(m_revisit_island, ndraws = 1000)
 ```
 
-```{r plots for revisits, cache=TRUE}
+```{r plots for revisits (predictions), cache=TRUE}
 # Get predicted probability for visited_prev=1 and visited_prev=0 then compute the difference
 newdata <- expand.grid(visited_prev = c(0, 1), season = c("spring", "summer", "winter"))
 
@@ -701,8 +820,7 @@ ggplot(contrast, aes(x = contrast, y = season, fill = season)) +
   
   theme_bw()
 ```
-
-```{r plots for revisits, cache=TRUE}
+```{r plots for revisits (predictions), cache=TRUE}
 #Instead of computing a contrast, summarises each of the 6 conditions separately. median_qi computes the median and two credible intervals for each group
 draws_summary <- draws %>%
   group_by(season, visited_prev) %>%
@@ -733,52 +851,13 @@ ggplot(draws_summary, aes(x = visited_prev, y = .epred, color = season, group = 
   theme_bw() 
 ```
 
-```{r plots for revisits, cache=TRUE}
-# Get individual-level predictions (include random effects)
-newdata_ind <- df_pairs %>%
-  distinct(ID, season) %>%
-  mutate(visited_prev = 1)   # probability of revisiting a door visited before
-
-draws_ind <- m_revisit %>%
-  epred_draws(newdata    = newdata_ind, re_formula = ~ (1 | ID), allow_new_levels = FALSE)
-
-draws_ind_sum <- draws_ind %>%
-  group_by(ID, season) %>%
-  median_qi(.epred, .width = 0.89) %>%
-  mutate(season = factor(season, levels = c("winter","summer","spring")))
-
-ggplot(draws_ind_sum, aes(x = .epred, y = reorder(ID, .epred), color = season)) +
-  
-  geom_pointrange(aes(xmin = .lower, xmax = .upper), linewidth = 0.6) +
-  
-  geom_vline(xintercept = 0.5, linetype   = "dashed", color      = "grey50") +
-  
-  facet_wrap(~ season, scales = "free_y", ncol   = 3) +
-  
-  scale_color_manual(
-    values = c(winter = "#5B8DB8",
-               summer = "#E8A438",
-               spring = "#6BAF6B")) +
-  
-  scale_x_continuous(limits = c(0, 1), labels = scales::percent) +
-  labs(x        = "P(revisit a previously visited door)",
-       y        = NULL,
-       title    = "Individual revisitation probabilities",
-       subtitle = "89% credible intervals · dashed line = chance") +
-  
-  theme_bw() +
-  
-  theme(legend.position = "none", axis.text.y      = element_text(size = 8))
-
-```
-
 # Posterior visualisation
 
 Once all models are fit, you can extract and plot the posterior distributions of the fixed effects. Here's a general template that works for any of the models above:
 
 ```{r posterior-plot-example, eval=FALSE}
 # Replace m_istime with any model name
-m_sim2_3 %>%
+m_move%>%
   gather_draws(`b_.*`, regex = TRUE) %>%
   filter(.variable != "b_Intercept") %>%
   ggplot(aes(x = .value, y = .variable)) +
