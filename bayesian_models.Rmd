@@ -273,32 +273,42 @@ df_preds <- bind_rows(
   get_season_predictions(m_istime, "Time to first island (s)"),
   get_season_predictions(m_dist,   "Average speed (cm/s)"),
   get_season_predictions(m_move,   "Time spent moving (s)"),
-  get_season_predictions(m_visit,  "Total visits (n)"), 
-  get_season_predictions(m_edge, "Time at the edges (s)")) %>%
+  get_season_predictions(m_visit,  "Total visits (n)")) %>%
   mutate(season = factor(season,levels = c("spring", "winter", "summer")),outcome = factor(outcome,
       levels = c(
         "Time to first island (s)",
         "Time spent moving (s)",
         "Average speed (cm/s)",
-        "Total visits (n)",
-        "Time at the edges (s)")))
+        "Total visits (n)")))
 
-ggplot(df_preds,aes(x = .epred,y = season,fill = season)) +
+df_preds_trimmed <- df_preds %>%
+  group_by(season, outcome) %>%
+  filter(
+    .epred >= quantile(.epred, 0.01),   # remove bottom 1%
+    .epred <= quantile(.epred, 0.99)    # remove top 1%
+  ) %>%
+  ungroup()
+
+ggplot(df_preds_trimmed,
+       aes(x = .epred, y = season, fill = season)) +
   
-  stat_halfeye(.width = c(0.66, 0.95), point_interval = median_qi, alpha = 0.8, normalize = "xy") +
+  stat_halfeye(
+    .width         = c(0.66, 0.95),
+    point_interval = median_qi,
+    alpha          = 0.85,
+    normalize      = "xy"
+  ) +
   
   facet_wrap(~ outcome, scales = "free_x", ncol = 2) +
-
+  
   scale_fill_manual(values = c(
-      winter = "#5B8DB8",
-      summer = "#E8A838",
-      spring = "#6BAF6B")) +
-
-  labs(x = "Predicted value", y = NULL,) +
-
+    summer = "#E8A838",
+    winter = "#5B8DB8",
+    spring = "#6BAF6B"
+  )) +
   theme_bw() +
-
-  theme(legend.position = "none", strip.text = element_text(size = 10, face = "bold"))
+  theme(legend.position = "none",
+        strip.text = element_text(size = 10, face = "bold"))
 
 # Helper to extract trial predictions from any model
 get_trial_predictions <- function(model, outcome_label) {
@@ -318,17 +328,14 @@ df_trials <- bind_rows(
   get_trial_predictions(m_istime, "Time to first island (s)"),
   get_trial_predictions(m_move, "Time spent moving (s)"),
   get_trial_predictions(m_dist, "Average speed (cm/s)"),
-  get_trial_predictions(m_visit, "Total visits (n)"),
-  get_trial_predictions(m_edge, "Time at the edges (s)")
-) %>%
+  get_trial_predictions(m_visit, "Total visits (n)")) %>%
   mutate(season  = factor(season, levels = c("summer","winter","spring")),
     trial   = factor(trial, levels = c("T1S1","T1S2","T2S1","T2S2")),
     outcome = factor(outcome,
                      levels = c("Time to first island (s)",
                                 "Time spent moving (s)", 
                                 "Average speed (cm/s)", 
-                                "Total visits (n)",
-                                "Time at the edges (s)")))
+                                "Total visits (n)")))
 
 ggplot(df_trials, aes(x = trial, y = .epred, color = season, group = season)) +
   # 95% CI ribbon
@@ -518,6 +525,88 @@ ggplot(df_contrasts,
     y        = NULL,
     title    = "Seasonal differences in foraging behaviour",
     subtitle = "Left of zero = less than summer · Right of zero = more than summer"
+  ) +
+  
+  theme_bw() +
+  theme(
+    legend.position = "none",
+    strip.text      = element_text(size = 10, face = "bold")
+  )
+
+get_season_contrast_grandmean <- function(model, outcome_label) {
+  model %>%
+    spread_draws(b_Intercept,
+                 b_seasonwinter,
+                 b_seasonspring) %>%
+    mutate(
+      # Absolute values per season
+      summer_abs = b_Intercept,
+      winter_abs = b_Intercept + b_seasonwinter,
+      spring_abs = b_Intercept + b_seasonspring,
+      
+      # Grand mean across the three seasons
+      grand_mean = (summer_abs + winter_abs + spring_abs) / 3,
+      
+      # Each season relative to the grand mean
+      summer = summer_abs - grand_mean,
+      winter = winter_abs - grand_mean,
+      spring = spring_abs - grand_mean
+    ) %>%
+    select(.draw, summer, winter, spring) %>%
+    pivot_longer(
+      cols      = c(summer, winter, spring),
+      names_to  = "season",
+      values_to = "contrast"
+    ) %>%
+    mutate(outcome = outcome_label)
+}
+
+df_grandmean <- bind_rows(
+  get_season_contrast_grandmean(m_istime, "Time to first island"),
+  get_season_contrast_grandmean(m_move,   "Time spent moving"),
+  get_season_contrast_grandmean(m_dist,   "Average speed"),
+  get_season_contrast_grandmean(m_visit,  "Total visits"),
+  get_season_contrast_grandmean(m_edge,   "Time at edges")
+) %>%
+  mutate(
+    season  = factor(season,  levels = c("spring","winter","summer")),
+    outcome = factor(outcome, levels = c(
+      "Time to first island",
+      "Time spent moving",
+      "Average speed",
+      "Total visits",
+      "Time at edges"
+    ))
+  )
+
+ggplot(df_grandmean,
+       aes(x = contrast, y = season, fill = season)) +
+  
+  stat_halfeye(
+    .width         = c(0.66, 0.95),
+    point_interval = median_qi,
+    alpha          = 0.85,
+    normalize      = "xy"
+  ) +
+  
+  geom_vline(xintercept = 0,
+             linetype   = "dashed",
+             color      = "grey40",
+             linewidth  = 0.6) +
+  
+  facet_wrap(~ outcome, scales = "free_x", ncol = 2) +
+  
+  scale_fill_manual(values = c(
+    summer = "#E8A838",
+    winter = "#5B8DB8",
+    spring = "#6BAF6B"
+  )) +
+  
+  labs(
+    x        = "Deviation from grand mean (model scale)",
+    y        = NULL,
+    title    = "Seasonal differences in foraging behaviour",
+    subtitle = "Zero = average across all seasons · positive = above average · negative = below average"
   ) +
   
   theme_bw() +
