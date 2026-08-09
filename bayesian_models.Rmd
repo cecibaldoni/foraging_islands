@@ -661,6 +661,44 @@ m_sim1_2 <- brm(sim_T1S1_T1S2 ~ season, data = path,
 summary(m_sim1_2)
 pp_check(m_sim1_2, ndraws = 1000)
 pp_check(m_sim1_2, type = "dens_overlay_grouped", group = "season", ndraws = 500)
+
+m_sim1_2 %>%
+  spread_draws(b_seasonwinter, b_seasonspring) %>%
+  rename(
+    `Winter` = b_seasonwinter,
+    `Spring` = b_seasonspring
+  ) %>%
+  pivot_longer(
+    cols      = c(`Winter`, `Spring`),
+    names_to  = "contrast",
+    values_to = "estimate"
+  ) %>%
+  
+  ggplot(aes(x = estimate, y = contrast, fill = contrast)) +
+  
+  stat_halfeye(
+    .width         = c(0.66, 0.95),
+    point_interval = median_qi,
+    alpha          = 0.85,
+    normalize      = "xy"
+  ) +
+  
+  geom_vline(xintercept = 0,
+             linetype   = "dashed",
+             color      = "grey40") +
+  
+  scale_fill_manual(values = c(
+    "Winter" = "#5B8DB8",
+    "Spring" = "#6BAF6B"
+  )) +
+  
+  labs(
+    x        = "Effect",
+    y        = NULL,
+  ) +
+  
+  theme_bw() +
+  theme(legend.position = "none")
 ```
 
 ---
@@ -690,6 +728,44 @@ m_sim2_3 <- brm(sim_T1S2_T2S1 ~ season,  data = path,
 summary(m_sim2_3)
 pp_check(m_sim2_3, ndraws = 1000)
 pp_check(m_sim2_3, type = "dens_overlay_grouped", group = "season", ndraws = 1000)
+
+m_sim2_3 %>%
+  spread_draws(b_seasonwinter, b_seasonspring) %>%
+  rename(
+    `Winter` = b_seasonwinter,
+    `Spring` = b_seasonspring
+  ) %>%
+  pivot_longer(
+    cols      = c(`Winter`, `Spring`),
+    names_to  = "contrast",
+    values_to = "estimate"
+  ) %>%
+  
+  ggplot(aes(x = estimate, y = contrast, fill = contrast)) +
+  
+  stat_halfeye(
+    .width         = c(0.66, 0.95),
+    point_interval = median_qi,
+    alpha          = 0.85,
+    normalize      = "xy"
+  ) +
+  
+  geom_vline(xintercept = 0,
+             linetype   = "dashed",
+             color      = "grey40") +
+  
+  scale_fill_manual(values = c(
+    "Winter" = "#5B8DB8",
+    "Spring" = "#6BAF6B"
+  )) +
+  
+  labs(
+    x        = "Effect",
+    y        = NULL,
+  ) +
+  
+  theme_bw() +
+  theme(legend.position = "none")
 ```
 
 ---
@@ -815,8 +891,8 @@ draws_coef <- m_revisit %>%
                `b_visited_prev:seasonspring`) %>%
   mutate(
     summer = b_visited_prev,                                    # reference level
-    winter = b_visited_prev + `b_visited_prev:seasonwinter`,  # add main effect
-    spring = b_visited_prev + `b_visited_prev:seasonspring`
+    winter =`b_visited_prev:seasonwinter`,  # add main effect
+    spring =w`b_visited_prev:seasonspring`
   ) %>%
   select(.draw, summer, winter, spring) %>%
   pivot_longer(cols      = c(summer, winter, spring),
@@ -946,7 +1022,7 @@ Once all models are fit, you can extract and plot the posterior distributions of
 
 ```{r posterior-plot-example, eval=FALSE}
 # Replace m_istime with any model name
-m_move%>%
+m_sim1_2%>%
   gather_draws(`b_.*`, regex = TRUE) %>%
   filter(.variable != "b_Intercept") %>%
   ggplot(aes(x = .value, y = .variable)) +
