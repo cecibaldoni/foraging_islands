@@ -150,6 +150,45 @@ m_istime <- brm(first_island_time ~ season + trial + (1 | season_ID), data    = 
 summary(m_istime)
 pp_check(m_istime, ndraws = 100)   # does the model reproduce the data distribution?
 plot(m_istime)                      # chain traceplots — should look like "fuzzy caterpillars"
+
+m_istime %>%
+  spread_draws(b_seasonwinter, b_seasonspring) %>%
+  rename(
+    `Winter` = b_seasonwinter,
+    `Spring` = b_seasonspring
+  ) %>%
+  pivot_longer(
+    cols      = c(`Winter`, `Spring`),
+    names_to  = "contrast",
+    values_to = "estimate"
+  ) %>%
+  
+  ggplot(aes(x = estimate, y = contrast, fill = contrast)) +
+  
+  stat_halfeye(
+    .width         = c(0.66, 0.95),
+    point_interval = median_qi,
+    alpha          = 0.85,
+    normalize      = "xy"
+  ) +
+  
+  geom_vline(xintercept = 0,
+             linetype   = "dashed",
+             color      = "grey40") +
+  
+  scale_fill_manual(values = c(
+    "Winter" = "#5B8DB8",
+    "Spring" = "#6BAF6B"
+  )) +
+  
+  labs(
+    x        = "Effect",
+    y        = NULL,
+  ) +
+  
+  theme_bw() +
+  theme(legend.position = "none")
+
 ```
 
 **How to read the output:** 
@@ -167,6 +206,7 @@ Distance covered per second of moving time. This measures how fast and wide-rang
 m_dist <- brm(distance_rate ~ season + trial + (1 | season_ID), sigma ~ season, data = master,  family  = lognormal(),
               prior = priors_lognormal,
               chains  = 4,  iter = 4000,  warmup  = 1000,  cores = 4,  seed = 4321)
+
 ```
 
 
@@ -174,10 +214,45 @@ m_dist <- brm(distance_rate ~ season + trial + (1 | season_ID), sigma ~ season, 
 summary(m_dist)
 pp_check(m_dist, ndraws = 2000)
 plot(m_dist)
+
+m_dist %>%
+  spread_draws(b_seasonwinter, b_seasonspring) %>%
+  rename(
+    `Winter` = b_seasonwinter,
+    `Spring` = b_seasonspring
+  ) %>%
+  pivot_longer(
+    cols      = c(`Winter`, `Spring`),
+    names_to  = "contrast",
+    values_to = "estimate"
+  ) %>%
+  
+  ggplot(aes(x = estimate, y = contrast, fill = contrast)) +
+  
+  stat_halfeye(
+    .width         = c(0.66, 0.95),
+    point_interval = median_qi,
+    alpha          = 0.85,
+    normalize      = "xy"
+  ) +
+  
+  geom_vline(xintercept = 0,
+             linetype   = "dashed",
+             color      = "grey40") +
+  
+  scale_fill_manual(values = c(
+    "Winter" = "#5B8DB8",
+    "Spring" = "#6BAF6B"
+  )) +
+  
+  labs(
+    x        = "Effect",
+    y        = NULL,
+  ) +
+  
+  theme_bw() +
+  theme(legend.position = "none")
 ```
-
----
-
 ## Total moving time
 
 How much of the session did the animal spend moving? Gaussian family — the sqrt transformation you used is not needed here because `brms` can handle the raw values, but check the `pp_check` to confirm the Gaussian assumption holds.
@@ -206,10 +281,45 @@ m_move <- brm(moving_time ~ season + trial + (1 | season_ID), data    = master, 
 summary(m_move)
 pp_check(m_move, ndraws = 1000)
 plot(m_move)
+
+m_move %>%
+  spread_draws(b_seasonwinter, b_seasonspring) %>%
+  rename(
+    `Winter` = b_seasonwinter,
+    `Spring` = b_seasonspring
+  ) %>%
+  pivot_longer(
+    cols      = c(`Winter`, `Spring`),
+    names_to  = "contrast",
+    values_to = "estimate"
+  ) %>%
+  
+  ggplot(aes(x = estimate, y = contrast, fill = contrast)) +
+  
+  stat_halfeye(
+    .width         = c(0.66, 0.95),
+    point_interval = median_qi,
+    alpha          = 0.85,
+    normalize      = "xy"
+  ) +
+  
+  geom_vline(xintercept = 0,
+             linetype   = "dashed",
+             color      = "grey40") +
+  
+  scale_fill_manual(values = c(
+    "Winter" = "#5B8DB8",
+    "Spring" = "#6BAF6B"
+  )) +
+  
+  labs(
+    x        = "Effect",
+    y        = NULL,
+  ) +
+  
+  theme_bw() +
+  theme(legend.position = "none")
 ```
-
-
----
 
 ## Total island visits
 
@@ -227,10 +337,45 @@ m_visit <- brm(tot_visit ~ season + trial + (1 | season_ID), data = master,
 ```{r m-visit-check}
 summary(m_visit)
 pp_check(m_visit, ndraws = 1000)
+
+m_visit %>%
+  spread_draws(b_seasonwinter, b_seasonspring) %>%
+  rename(
+    `Winter` = b_seasonwinter,
+    `Spring` = b_seasonspring
+  ) %>%
+  pivot_longer(
+    cols      = c(`Winter`, `Spring`),
+    names_to  = "contrast",
+    values_to = "estimate"
+  ) %>%
+  
+  ggplot(aes(x = estimate, y = contrast, fill = contrast)) +
+  
+  stat_halfeye(
+    .width         = c(0.66, 0.95),
+    point_interval = median_qi,
+    alpha          = 0.85,
+    normalize      = "xy"
+  ) +
+  
+  geom_vline(xintercept = 0,
+             linetype   = "dashed",
+             color      = "grey40") +
+  
+  scale_fill_manual(values = c(
+    "Winter" = "#5B8DB8",
+    "Spring" = "#6BAF6B"
+  )) +
+  
+  labs(
+    x        = "Effect",
+    y        = NULL,
+  ) +
+  
+  theme_bw() +
+  theme(legend.position = "none")
 ```
-
----
-
 # Models from `edges`
 
 ## Proportion of time at the edge
@@ -254,6 +399,44 @@ m_edge <- brm(time_edge ~ season + trial + (1 | season_ID), data = subset(edges,
 ```{r m-edge-check}
 summary(m_edge)
 pp_check(m_edge, ndraws = 1000)
+
+m_edge %>%
+  spread_draws(b_seasonwinter, b_seasonspring) %>%
+  rename(
+    `Winter` = b_seasonwinter,
+    `Spring` = b_seasonspring
+  ) %>%
+  pivot_longer(
+    cols      = c(`Winter`, `Spring`),
+    names_to  = "contrast",
+    values_to = "estimate"
+  ) %>%
+  
+  ggplot(aes(x = estimate, y = contrast, fill = contrast)) +
+  
+  stat_halfeye(
+    .width         = c(0.66, 0.95),
+    point_interval = median_qi,
+    alpha          = 0.85,
+    normalize      = "xy"
+  ) +
+  
+  geom_vline(xintercept = 0,
+             linetype   = "dashed",
+             color      = "grey40") +
+  
+  scale_fill_manual(values = c(
+    "Winter" = "#5B8DB8",
+    "Spring" = "#6BAF6B"
+  )) +
+  
+  labs(
+    x        = "Effect",
+    y        = NULL,
+  ) +
+  
+  theme_bw() +
+  theme(legend.position = "none")
 ```
 
 ---
@@ -459,6 +642,180 @@ ggplot(
       face = "bold"
     )
   )
+
+library(patchwork)
+
+# --- Data preparation (same as before) ---
+
+#< Season predictions (trimmed)
+df_preds_trimmed <- bind_rows(
+  get_season_predictions(m_istime, "Time to first interaction (s)"),
+  get_season_predictions(m_dist,   "Average speed (cm/s)"),
+  get_season_predictions(m_move,   "Time spent moving (s)"),
+  get_season_predictions(m_visit,  "Total visits (n)"), 
+  get_season_predictions(m_edge, "Time at the edges (s)")
+) %>%
+  mutate(season = factor(season, levels = c("spring","winter","summer")),
+         outcome = factor(outcome, levels = c(
+           "Time to first interaction (s)",
+           "Time spent moving (s)",
+           "Average speed (cm/s)",
+           "Total visits (n)",
+           "Time at the edges (s)"
+         ))) %>%
+  group_by(season, outcome) %>%
+  filter(
+    .epred >= quantile(.epred, 0.01),
+    .epred <= quantile(.epred, 0.99)
+  ) %>%
+  ungroup()
+
+df_preds_trimmed <- df_preds_trimmed %>%
+  mutate(.epred = ifelse(outcome == "Time at the edges (s)", 
+                         .epred * 1000, 
+                         .epred))
+
+# Trial predictions
+df_trials <- bind_rows(
+  get_trial_predictions(m_istime, "Time to first interaction (s)"),
+  get_trial_predictions(m_move,   "Time spent moving (s)"),
+  get_trial_predictions(m_dist,   "Average speed (cm/s)"),
+  get_trial_predictions(m_visit,  "Total visits (n)"), 
+  get_trial_predictions(m_edge, "Time at the edges (s)")
+) %>%
+  mutate(
+    season  = factor(season,  levels = c("summer","winter","spring")),
+    trial   = factor(trial,   levels = c("T1S1","T1S2","T2S1","T2S2")),
+    outcome = factor(outcome, levels = c(
+      "Time to first interaction (s)",
+      "Time spent moving (s)",
+      "Average speed (cm/s)",
+      "Total visits (n)", 
+      "Time at the edges (s)"
+    ))
+  )
+
+df_trials <- df_trials %>%
+  mutate(
+    .epred = ifelse(outcome == "Time at the edges (s)", .epred * 1000, .epred),
+    .lower = ifelse(outcome == "Time at the edges (s)", .lower * 1000, .lower),
+    .upper = ifelse(outcome == "Time at the edges (s)", .upper * 1000, .upper)
+  )
+
+# --- Plot factory ---
+
+make_combined_plot <- function(outcome_name) {
+
+  # Left panel — season predictions
+  p_season <- df_preds_trimmed %>%
+    filter(outcome == outcome_name) %>%
+    ggplot(aes(x = .epred, y = season, fill = season)) +
+    
+    stat_halfeye(
+      .width         = c(0.66, 0.95),
+      point_interval = median_qi,
+      alpha          = 0.85,
+      normalize      = "xy"
+    ) +
+    
+    scale_fill_manual(values = c(
+      summer = "#E8A838",
+      winter = "#5B8DB8",
+      spring = "#6BAF6B"
+    )) +
+    
+    labs(
+      x     = NULL,
+      y     = NULL,
+      title = NULL
+    ) +
+    
+    theme_bw() +
+    theme(
+      legend.position = "none",
+      plot.title      = element_text(size = 11, face = "bold", hjust = 0.5),
+      axis.text.y     = element_text(size = 10)
+    )
+
+  # Right panel — trial trajectory
+  p_trial <- df_trials %>%
+    filter(outcome == outcome_name) %>%
+    ggplot(aes(x = trial, y = .epred,
+               color = season, group = season)) +
+    
+    geom_ribbon(
+      aes(ymin = .lower, ymax = .upper, fill = season),
+      alpha = 0.12, color = NA
+    ) +
+    
+    geom_ribbon(
+      data = df_trials %>%
+        filter(outcome == outcome_name, .width == 0.66),
+      aes(ymin = .lower, ymax = .upper, fill = season),
+      alpha = 0.25, color = NA
+    ) +
+    
+    geom_line(linewidth = 1.1) +
+    geom_point(size = 3) +
+    
+    scale_color_manual(values = c(
+      summer = "#E8A838",
+      winter = "#5B8DB8",
+      spring = "#6BAF6B"
+    )) +
+    scale_fill_manual(values = c(
+      summer = "#E8A838",
+      winter = "#5B8DB8",
+      spring = "#6BAF6B"
+    )) +
+    
+    labs(
+      x     = NULL,
+      y     = outcome_name,
+      title = NULL,
+      color = "Season",
+      fill  = "Season"
+    ) +
+    
+    theme_bw() +
+    theme(
+  plot.title        = element_text(size = 11, face = "bold", hjust = 0.5),
+  axis.text.x       = element_text(angle = 30, hjust = 1),
+  axis.title.y      = element_blank()
+    )
+
+  # Combine side by side with shared centered legend
+  (p_season + p_trial +
+    plot_layout(
+      widths = c(1, 1.4),
+      guides = "collect"
+    )) +
+    plot_annotation(
+      title = outcome_name,
+      theme = theme(
+        plot.title = element_text(size = 13, face = "bold", hjust = 0.5)
+      )
+    ) & theme(legend.position = "none")
+}
+
+# --- Generate all 4 plots ---
+
+outcomes <- c(
+  "Time to first interaction (s)",
+  "Time spent moving (s)",
+  "Average speed (cm/s)",
+  "Total visits (n)", 
+  "Time at the edges (s)"
+)
+
+plots <- lapply(outcomes, make_combined_plot)
+
+# Print them one by one
+plots[[1]]   # Time to first island
+plots[[2]]   # Time spent moving
+plots[[3]]   # Average speed
+plots[[4]]   # Total visits
+plots[[5]]   # Time at the edges
 ```
 
 ```{r plots (models)}
@@ -729,7 +1086,7 @@ summary(m_sim2_3)
 pp_check(m_sim2_3, ndraws = 1000)
 pp_check(m_sim2_3, type = "dens_overlay_grouped", group = "season", ndraws = 1000)
 
-m_sim2_3 %>%
+m_sim2_3                                                 %>%
   spread_draws(b_seasonwinter, b_seasonspring) %>%
   rename(
     `Winter` = b_seasonwinter,
@@ -892,7 +1249,7 @@ draws_coef <- m_revisit %>%
   mutate(
     summer = b_visited_prev,                                    # reference level
     winter =`b_visited_prev:seasonwinter`,  # add main effect
-    spring =w`b_visited_prev:seasonspring`
+    spring =`b_visited_prev:seasonspring`
   ) %>%
   select(.draw, summer, winter, spring) %>%
   pivot_longer(cols      = c(summer, winter, spring),
