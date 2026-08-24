@@ -135,7 +135,7 @@ priors_bernoulli <- c(
 
 # Models from `master`
 
-## Time to first island
+## Time to first interaction with island
 
 How long does the animal take to reach any island for the first time? Shorter times suggest bolder or more efficient exploration. This uses a **lognormal** family because the outcome is a positive continuous variable that is right-skewed (a few animals take very long, most are faster).
 
@@ -269,12 +269,6 @@ priors_lognormal2 <- c(
 
 ```{r m-move, cache=TRUE} 
 m_move <- brm(moving_time ~ season + trial + (1 | season_ID), data    = master, family  = lognormal(), prior   = priors_lognormal2, chains  = 4, iter    = 4000, warmup  = 1000, cores   = 4, seed    = 4321)
-```
-
-```{r m-move, cache=TRUE}
-# m_move <- brm(moving_time ~ season + trial + (1 | season_ID),  data    = master,
-#               family = gaussian(), prior = priors_gaussian,
-#               chains = 4, iter = 4000, warmup = 1000, cores = 4, seed = 4321)
 ```
 
 ```{r m-move-check}
@@ -818,162 +812,6 @@ plots[[4]]   # Total visits
 plots[[5]]   # Time at the edges
 ```
 
-```{r plots (models)}
-get_season_contrast_coef <- function(model, outcome_label) {
-  model %>%
-    spread_draws(b_seasonwinter,
-                 b_seasonspring) %>%
-    rename(
-      `Winter vs Summer` = b_seasonwinter,
-      `Spring vs Summer` = b_seasonspring
-    ) %>%
-    pivot_longer(
-      cols      = c(`Winter vs Summer`, `Spring vs Summer`),
-      names_to  = "contrast",
-      values_to = "coefficient"
-    ) %>%
-    mutate(outcome = outcome_label)
-}
-
-df_contrasts <- bind_rows(
-  get_season_contrast_coef(m_istime, "Time to first island"),
-  get_season_contrast_coef(m_move,   "Time spent moving"),
-  get_season_contrast_coef(m_dist,   "Average speed"),
-  get_season_contrast_coef(m_visit,  "Total visits"),
-  get_season_contrast_coef(m_edge,   "Time at edges")
-) %>%
-  mutate(
-    contrast = factor(contrast,
-                      levels = c("Winter vs Summer",
-                                 "Spring vs Summer")),
-    outcome  = factor(outcome, levels = c(
-      "Time to first island",
-      "Time spent moving",
-      "Average speed",
-      "Total visits",
-      "Time at edges"
-    ))
-  )
-
-ggplot(df_contrasts,
-       aes(x = coefficient, y = contrast, fill = contrast)) +
-  
-  stat_halfeye(
-    .width         = c(0.66, 0.95),
-    point_interval = median_qi,
-    alpha          = 0.85,
-    normalize      = "xy"
-  ) +
-  
-  geom_vline(xintercept = 0,
-             linetype   = "dashed",
-             color      = "grey40",
-             linewidth  = 0.6) +
-  
-  facet_wrap(~ outcome, scales = "free_x", ncol = 2) +
-  
-  scale_fill_manual(values = c(
-    "Winter vs Summer" = "#5B8DB8",
-    "Spring vs Summer" = "#6BAF6B"
-  )) +
-  
-  labs(
-    x        = "Posterior coefficient (model scale)",
-    y        = NULL,
-    title    = "Seasonal differences in foraging behaviour",
-    subtitle = "Left of zero = less than summer · Right of zero = more than summer"
-  ) +
-  
-  theme_bw() +
-  theme(
-    legend.position = "none",
-    strip.text      = element_text(size = 10, face = "bold")
-  )
-
-get_season_contrast_grandmean <- function(model, outcome_label) {
-  model %>%
-    spread_draws(b_Intercept,
-                 b_seasonwinter,
-                 b_seasonspring) %>%
-    mutate(
-      # Absolute values per season
-      summer_abs = b_Intercept,
-      winter_abs = b_Intercept + b_seasonwinter,
-      spring_abs = b_Intercept + b_seasonspring,
-      
-      # Grand mean across the three seasons
-      grand_mean = (summer_abs + winter_abs + spring_abs) / 3,
-      
-      # Each season relative to the grand mean
-      summer = summer_abs - grand_mean,
-      winter = winter_abs - grand_mean,
-      spring = spring_abs - grand_mean
-    ) %>%
-    select(.draw, summer, winter, spring) %>%
-    pivot_longer(
-      cols      = c(summer, winter, spring),
-      names_to  = "season",
-      values_to = "contrast"
-    ) %>%
-    mutate(outcome = outcome_label)
-}
-
-df_grandmean <- bind_rows(
-  get_season_contrast_grandmean(m_istime, "Time to first island"),
-  get_season_contrast_grandmean(m_move,   "Time spent moving"),
-  get_season_contrast_grandmean(m_dist,   "Average speed"),
-  get_season_contrast_grandmean(m_visit,  "Total visits"),
-  get_season_contrast_grandmean(m_edge,   "Time at edges")
-) %>%
-  mutate(
-    season  = factor(season,  levels = c("spring","winter","summer")),
-    outcome = factor(outcome, levels = c(
-      "Time to first island",
-      "Time spent moving",
-      "Average speed",
-      "Total visits",
-      "Time at edges"
-    ))
-  )
-
-ggplot(df_grandmean,
-       aes(x = contrast, y = season, fill = season)) +
-  
-  stat_halfeye(
-    .width         = c(0.66, 0.95),
-    point_interval = median_qi,
-    alpha          = 0.85,
-    normalize      = "xy"
-  ) +
-  
-  geom_vline(xintercept = 0,
-             linetype   = "dashed",
-             color      = "grey40",
-             linewidth  = 0.6) +
-  
-  facet_wrap(~ outcome, scales = "free_x", ncol = 2) +
-  
-  scale_fill_manual(values = c(
-    summer = "#E8A838",
-    winter = "#5B8DB8",
-    spring = "#6BAF6B"
-  )) +
-  
-  labs(
-    x        = "Deviation from grand mean (model scale)",
-    y        = NULL,
-    title    = "Seasonal differences in foraging behaviour",
-    subtitle = "Zero = average across all seasons · positive = above average · negative = below average"
-  ) +
-  
-  theme_bw() +
-  theme(
-    legend.position = "none",
-    strip.text      = element_text(size = 10, face = "bold")
-  )
-```
-
-
 # Models from `path`
 
 These models use spatial similarity scores as outcomes. Each similarity score is a Bray-Curtis coefficient (0 = no overlap, 1 = identical space use) computed per individual across trials. Because `path` has one row per individual (30 rows), there is no repeated measures structure and no random effect needed.
@@ -1139,6 +977,43 @@ summary(m_sim1_3)
 pp_check(m_sim1_3, ndraws = 1000)
 pp_check(m_sim1_3, type = "dens_overlay_grouped", group = "season", ndraws = 500)
 
+m_sim1_3 %>%
+  spread_draws(b_seasonwinter, b_seasonspring) %>%
+  rename(
+    `Winter` = b_seasonwinter,
+    `Spring` = b_seasonspring
+  ) %>%
+  pivot_longer(
+    cols      = c(`Winter`, `Spring`),
+    names_to  = "contrast",
+    values_to = "estimate"
+  ) %>%
+  
+  ggplot(aes(x = estimate, y = contrast, fill = contrast)) +
+  
+  stat_halfeye(
+    .width         = c(0.66, 0.95),
+    point_interval = median_qi,
+    alpha          = 0.85,
+    normalize      = "xy"
+  ) +
+  
+  geom_vline(xintercept = 0,
+             linetype   = "dashed",
+             color      = "grey40") +
+  
+  scale_fill_manual(values = c(
+    "Winter" = "#5B8DB8",
+    "Spring" = "#6BAF6B"
+  )) +
+  
+  labs(
+    x        = "Effect",
+    y        = NULL,
+  ) +
+  
+  theme_bw() +
+  theme(legend.position = "none")
 ```
 
 ---
@@ -1379,7 +1254,7 @@ Once all models are fit, you can extract and plot the posterior distributions of
 
 ```{r posterior-plot-example, eval=FALSE}
 # Replace m_istime with any model name
-m_sim1_2%>%
+m_sim1_3%>%
   gather_draws(`b_.*`, regex = TRUE) %>%
   filter(.variable != "b_Intercept") %>%
   ggplot(aes(x = .value, y = .variable)) +
