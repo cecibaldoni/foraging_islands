@@ -563,8 +563,8 @@ df_sim <- bind_rows(
   get_similarity_predictions(
     m_sim2_3,
     "Similarity T1S2–T2S1"
-  )
-) %>%
+  ),
+  get_similarity_predictions(m_sim1_3, "Similarity T1S1-T2S1")) %>%
   mutate(
     season = factor(
       season,
@@ -574,7 +574,8 @@ df_sim <- bind_rows(
       comparison,
       levels = c(
         "Similarity T1S1–T1S2",
-        "Similarity T1S2–T2S1"
+        "Similarity T1S2–T2S1",
+        "Similarity T1S1-T2S1"
       )
     )
   )
